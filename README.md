@@ -22,7 +22,7 @@ applications and AI questions are never mixed with another person's.
 ## Easy start (double-click)
 | File | What it does |
 |---|---|
-| `start.bat` | Starts Docker and the app, sets up `.env` and the admin login on first run, opens the dashboard |
+| `start.bat` | Starts Docker and the app, checks the port is free, sets up `.env` and the admin login on first run, opens the dashboard |
 | `stop.bat` | Stops the app (data is kept) |
 | `search_now.bat` | Runs the job search now for every active user |
 | `create_admin.bat` | Creates another admin login |
@@ -40,7 +40,7 @@ copy .env.example .env        # then open .env and set DJANGO_SECRET_KEY and ANT
 docker compose up -d --build
 docker compose exec web python manage.py createsuperuser   # your admin login (one time)
 ```
-Open **http://localhost:8000** and log in. Click **Give access** to add a user (e.g. SaruTuitui).
+Open **http://localhost:8010** (port set by `APP_PORT` in `.env`; 8000 is left free for the ERP) and log in. Click **Give access** to add a user (e.g. SaruTuitui).
 
 Useful commands:
 ```powershell

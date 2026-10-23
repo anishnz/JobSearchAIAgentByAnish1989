@@ -47,6 +47,23 @@ echo (You can leave it empty to use the free basic matching.) Save and close Not
 notepad ".env"
 :env_ok
 
+REM ---- Read the port from .env (default 8010) and check it is free
+set APP_PORT=8010
+for /f "tokens=1,* delims==" %%a in ('findstr /b /c:"APP_PORT=" ".env"') do set APP_PORT=%%b
+set RUNNING=
+for /f %%i in ('docker compose ps --status running -q web 2^>nul') do set RUNNING=1
+if defined RUNNING goto port_ok
+netstat -ano | findstr /r /c:":%APP_PORT% .*LISTENING" >nul
+if errorlevel 1 goto port_ok
+echo.
+echo Port %APP_PORT% is already used by another program (for example your ERP).
+echo Notepad will open. Change APP_PORT= to a free number (e.g. 8020), save, then run start.bat again.
+notepad ".env"
+pause
+exit /b 1
+:port_ok
+echo Using port %APP_PORT%.
+
 REM ---- 4. Build and start the containers
 echo.
 echo Starting the app (the first time can take a few minutes)...
@@ -60,7 +77,7 @@ if errorlevel 1 (
 REM ---- 5. Wait until the website answers
 echo Waiting for the website...
 for /l %%i in (1,1,40) do (
-  curl -s -o nul http://localhost:8000/login/ && goto web_ok
+  curl -s -o nul http://localhost:%APP_PORT%/login/ && goto web_ok
   timeout /t 2 /nobreak >nul
 )
 echo The website is slow to start. Run logs.bat to see what is happening.
@@ -78,10 +95,10 @@ docker compose exec web python manage.py createsuperuser
 if not errorlevel 1 echo created> "data\.admin_created"
 
 :open_site
-start "" http://localhost:8000
+start "" http://localhost:%APP_PORT%
 echo.
 echo ============================================
-echo   Running at http://localhost:8000
+echo   Running at http://localhost:%APP_PORT%
 echo   Daily job search: 8:00 AM Auckland time
 echo   To stop: double-click stop.bat
 echo ============================================
