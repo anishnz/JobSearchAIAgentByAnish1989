@@ -19,6 +19,20 @@ applications and AI questions are never mixed with another person's.
 - **Auto mode (off by default)** - only the person themselves can turn it on. It prepares applications automatically
   for strong matches; the final submission is always done by the person on the employer's website.
 
+## Easy start (double-click)
+| File | What it does |
+|---|---|
+| `start.bat` | Starts Docker and the app, sets up `.env` and the admin login on first run, opens the dashboard |
+| `stop.bat` | Stops the app (data is kept) |
+| `search_now.bat` | Runs the job search now for every active user |
+| `create_admin.bat` | Creates another admin login |
+| `logs.bat` | Shows live logs (for problems) |
+| `backup.bat` | Copies the `data` folder to `backups\data_<date>` |
+| `run_tests.bat` | Runs the automated tests |
+
+The app restarts by itself whenever Docker Desktop is running. To start everything when Windows starts,
+turn on "Start Docker Desktop when you sign in" in Docker Desktop settings.
+
 ## Run it (Windows, Docker Desktop)
 ```powershell
 cd D:\JobSearchAgent\JobSearchAIAgentByAnish1989
