@@ -28,6 +28,7 @@ applications and AI questions are never mixed with another person's.
 | `set_password.bat` | Sets or changes a login password |
 | `create_admin.bat` | Creates another admin login |
 | `logs.bat` | Shows live logs (for problems) |
+| `import_cvs.bat` | Imports CV files from `data\import\<login name>\` into that person's account |
 | `backup.bat` | Copies the `data` folder to `backups\data_<date>` |
 | `run_tests.bat` | Runs the automated tests |
 

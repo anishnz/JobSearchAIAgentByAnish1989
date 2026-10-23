@@ -240,7 +240,7 @@ def _words(text):
 
 def relevant_cvs(candidate, job, n=2):
     """Pick this candidate's CVs that best fit the job (by title, 'best for' and content words)."""
-    cvs = list(candidate.cvs.all())
+    cvs = [cv for cv in candidate.cvs.all() if not cv.category.lower().startswith("cover letter")]
     if len(cvs) <= n:
         return cvs
     job_title = _words(job.title)
@@ -276,8 +276,10 @@ def _job_block(job):
 
 # ---------------------------------------------------------------- CV analysis (first login)
 JOB_TYPE_KEYWORDS = {
-    "Kitchen Hand": ["kitchen", "chef", "cook", "restaurant", "food preparation", "catering"],
-    "Dishwasher": ["dishwash", "kitchen", "restaurant"],
+    "Receptionist / Front Desk": ["receptionist", "front desk", "reception", "check-in", "guest services"],
+    "Front of House / Hospitality": ["front of house", "hospitality", "guest", "restaurant", "host"],
+    "Kitchen Hand": ["kitchen hand", "kitchen helper", "chef", "cook", "food preparation", "catering"],
+    "Dishwasher": ["dishwash", "dish washing", "kitchen porter"],
     "Cafe / Barista": ["barista", "coffee", "cafe"],
     "Waiter / Food and Beverage": ["waiter", "waitress", "front of house", "hospitality", "bar"],
     "Commercial Cleaner": ["clean", "janitor", "sanitis"],
@@ -290,7 +292,7 @@ JOB_TYPE_KEYWORDS = {
     "Accounts Assistant": ["accounting", "accounts", "bookkeep", "xero", "myob", "finance", "payroll"],
     "Caregiver / Support Worker": ["caregiver", "aged care", "disability", "support worker", "healthcare assistant"],
     "Nurse": ["registered nurse", "nursing", "enrolled nurse"],
-    "Teacher Aide / Tutor": ["teacher", "tutor", "teaching", "lecturer", "school", "early childhood"],
+    "Teacher Aide / Tutor": ["teacher aide", "tutor", "teaching", "lecturer", "classroom"],
     "Childcare / ECE Assistant": ["childcare", "early childhood", "nanny", "kindergarten"],
     "Driver / Delivery": ["driver", "delivery", "courier", "class 2", "licence"],
     "Labourer / Construction": ["construction", "labourer", "building site", "carpentry"],
@@ -330,7 +332,7 @@ def basic_cv_analysis(text):
     phone = re.search(r"(\+64|0)[\s-]?\d{1,2}[\s-]?\d{3}[\s-]?\d{3,4}", text)
     first = next((l.strip() for l in text.splitlines() if l.strip()), "")
     scores = {jt: sum(low.count(k) for k in kws) for jt, kws in JOB_TYPE_KEYWORDS.items()}
-    suggested = [jt for jt, sc in sorted(scores.items(), key=lambda x: -x[1]) if sc > 0][:8]
+    suggested = [jt for jt, sc in sorted(scores.items(), key=lambda x: -x[1]) if sc >= 2][:6]
     if not suggested:
         suggested = ["Customer Service", "Retail Assistant", "Warehouse Assistant", "Commercial Cleaner"]
     return {
@@ -432,6 +434,7 @@ def generate_documents(candidate, job):
                   "1) A one-page NZ-style ATS-friendly CV in plain text that includes only relevant true experience.\n"
                   "2) A short cover letter (under 250 words).\n3) A short application email with a subject line.\n"
                   "Where a fact is missing, write [ADD: what is needed] instead of guessing.\n"
+                  f"{_cover_sample(candidate)}"
                   "Use exactly these separators on their own lines:\n===CV===\n===COVER LETTER===\n===EMAIL===")
         text = ask_claude(prompt, key, max_tokens=3500)
         parts = re.split(r"^===\s*(CV|COVER LETTER|EMAIL)\s*===\s*$", text, flags=re.M | re.I)
@@ -444,6 +447,14 @@ def generate_documents(candidate, job):
         return out
 
     return with_fallback(candidate, ai, basic)
+
+
+def _cover_sample(candidate):
+    sample = candidate.cvs.filter(category__istartswith="cover letter").first()
+    if not sample:
+        return ""
+    return ("Here is a cover letter the candidate wrote before. Match its tone, but use only true facts and "
+            f"tailor it to this job:\n<sample_cover_letter>\n{sample.text[:2500]}\n</sample_cover_letter>\n")
 
 
 def youtube_search_links(job_title):
