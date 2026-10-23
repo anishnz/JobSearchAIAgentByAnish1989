@@ -1,1 +1,1 @@
-{% if s is None %}<span class="muted">-</span>{% elif s >= 70 %}<span class="score hi">{{ s }}</span>{% elif s >= 45 %}<span class="score mid">{{ s }}</span>{% else %}<span class="score lo">{{ s }}</span>{% endif %}
+{% if s is None %}<span class="score" style="background:#eef2f8;color:#5f6b80">–</span>{% elif s >= 70 %}<span class="score hi">{{ s }}</span>{% elif s >= 45 %}<span class="score mid">{{ s }}</span>{% else %}<span class="score lo">{{ s }}</span>{% endif %}

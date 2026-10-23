@@ -1,11 +1,13 @@
 """Simple, reliable scheduler: runs the daily search at 8:00 AM Auckland time (configurable)."""
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
+from agent.models import SystemSettings
 
 
 def next_run_after(now, hour, minute):
@@ -27,5 +29,6 @@ class Command(BaseCommand):
             self.stdout.write(f"[scheduler] now {now:%Y-%m-%d %H:%M %Z}; next search {target:%Y-%m-%d %H:%M %Z}",
                               ending="\n")
             while timezone.localtime() < target:
+                SystemSettings.objects.update_or_create(pk=1, defaults={"scheduler_heartbeat": timezone.now()})
                 time.sleep(min(60, max(1, (target - timezone.localtime()).total_seconds())))
             call_command("run_daily_search")

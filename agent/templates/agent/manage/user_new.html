@@ -1,0 +1,7 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>Add a user</h1><p>The person logs in, uploads their CV, and the AI sets up their job search.</p></div></div>
+<div class="card" style="max-width:640px">
+  <form method="post">{% csrf_token %}{{ form.as_p }}<p style="margin-top:12px"><button class="big">Create access</button></p></form>
+</div>
+{% endblock %}

@@ -4,6 +4,9 @@ import re
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
+
+from .crypto import decrypt, encrypt
 
 
 class Candidate(models.Model):
@@ -17,6 +20,8 @@ class Candidate(models.Model):
     ]
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="candidate")
+    slug = models.SlugField(max_length=40, unique=True, null=True, blank=True,
+                            help_text="Personal link name, e.g. anishcv -> anishcv.localhost:8010")
     full_name = models.CharField(max_length=120)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=40, blank=True)
@@ -25,6 +30,9 @@ class Candidate(models.Model):
         blank=True, help_text="Job types to search, one per line or comma separated (e.g. kitchen hand, retail assistant)."
     )
     availability = models.TextField(blank=True, help_text="When you can work, e.g. Mon-Fri any time.")
+    education = models.TextField(blank=True)
+    experience_summary = models.TextField(blank=True)
+    skills = models.TextField(blank=True)
     extra_notes = models.TextField(blank=True, help_text="Anything true the AI should know (licence, certificates, etc.).")
     auto_mode = models.CharField(max_length=10, choices=AUTO_MODES, default=MODE_SUGGEST)
     auto_consent = models.BooleanField(
@@ -32,6 +40,19 @@ class Candidate(models.Model):
     )
     min_match_score = models.PositiveSmallIntegerField(default=65)
     is_active = models.BooleanField(default=True, help_text="Include in the daily 8:00 AM search.")
+    search_paused = models.BooleanField(default=False)
+    onboarding_done = models.BooleanField(default=False)
+
+    # Permissions controlled by the super admin
+    ai_allowed = models.BooleanField(default=True)
+    email_allowed = models.BooleanField(default=True)
+    auto_allowed = models.BooleanField(default=True)
+
+    # Personal settings (secrets are encrypted)
+    gmail_address = models.EmailField(blank=True)
+    gmail_app_password_enc = models.TextField(blank=True)
+    ai_key_enc = models.TextField(blank=True)
+
     last_insight = models.TextField(blank=True)
     last_insight_at = models.DateTimeField(null=True, blank=True)
     last_search_at = models.DateTimeField(null=True, blank=True)
@@ -43,6 +64,37 @@ class Candidate(models.Model):
     def __str__(self):
         return self.full_name
 
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(re.split(r"[\s_.-]+", (self.full_name or self.user.username).strip())[0]) + "cv"
+            slug, n = base, 2
+            while Candidate.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug, n = f"{base}{n}", n + 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    # ---- secrets
+    @property
+    def ai_key(self):
+        return decrypt(self.ai_key_enc)
+
+    @ai_key.setter
+    def ai_key(self, value):
+        self.ai_key_enc = encrypt(value.strip()) if value else ""
+
+    @property
+    def gmail_app_password(self):
+        return decrypt(self.gmail_app_password_enc)
+
+    @gmail_app_password.setter
+    def gmail_app_password(self, value):
+        self.gmail_app_password_enc = encrypt(value.replace(" ", "")) if value else ""
+
+    @property
+    def gmail_ready(self):
+        return bool(self.email_allowed and self.gmail_address and self.gmail_app_password_enc)
+
+    # ---- helpers
     def keyword_list(self):
         return [k.strip() for k in re.split(r"[,\n]", self.job_types or "") if k.strip()]
 
@@ -56,7 +108,11 @@ class Candidate(models.Model):
 
     @property
     def auto_enabled(self):
-        return self.auto_consent and self.auto_mode != self.MODE_SUGGEST
+        return self.auto_allowed and self.auto_consent and self.auto_mode != self.MODE_SUGGEST
+
+    @property
+    def first_name(self):
+        return (self.full_name or "").split(" ")[0]
 
 
 class CVDocument(models.Model):
@@ -126,6 +182,8 @@ class Application(models.Model):
     cover_letter = models.TextField(blank=True)
     email_draft = models.TextField(blank=True)
     interview_prep = models.TextField(blank=True)
+    employer_email = models.EmailField(blank=True, help_text="Where to send the application (from the job advert).")
+    email_sent_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=12, choices=STATUSES, default="draft")
     applied_at = models.DateField(null=True, blank=True)
     follow_up_date = models.DateField(null=True, blank=True)
@@ -155,6 +213,37 @@ class AIQuestion(models.Model):
 
     def __str__(self):
         return f"Question for {self.candidate}: {self.question[:60]}"
+
+
+class SystemSettings(models.Model):
+    """One row of system-wide settings, edited by the super admin."""
+
+    site_title = models.CharField(max_length=120, default="Job Search AI Agent")
+    gmail_address = models.EmailField(blank=True, help_text="Sends 'forgot password' emails.")
+    gmail_app_password_enc = models.TextField(blank=True)
+    scheduler_heartbeat = models.DateTimeField(null=True, blank=True)
+    last_daily_run = models.DateTimeField(null=True, blank=True)
+    last_daily_result = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name_plural = "System settings"
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def gmail_app_password(self):
+        return decrypt(self.gmail_app_password_enc)
+
+    @gmail_app_password.setter
+    def gmail_app_password(self, value):
+        self.gmail_app_password_enc = encrypt(value.replace(" ", "")) if value else ""
+
+    @property
+    def email_ready(self):
+        return bool(self.gmail_address and self.gmail_app_password_enc)
 
 
 class AuditLog(models.Model):

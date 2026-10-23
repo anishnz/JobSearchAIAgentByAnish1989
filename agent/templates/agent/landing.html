@@ -1,0 +1,23 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<style>
+.hero{background:linear-gradient(135deg,#0f2747,#1e4fae);color:#fff;border-radius:20px;padding:48px 40px;margin:10px 0 24px}
+.hero h1{font-size:36px;margin-bottom:10px}.hero p{font-size:18px;color:#dbe5f7;max-width:640px}
+.feat{font-size:28px;margin-bottom:6px}
+</style>
+<div class="hero">
+  <h1>{{ site_title }}</h1>
+  <p>Your personal job search helper for Auckland. Upload your CV, and the agent finds jobs that fit your own education and experience, writes a tailored CV and cover letter, and keeps track of every application.</p>
+  <div class="row" style="margin-top:22px">
+    <a class="btn big" href="{% url 'login' %}" style="background:#fff;color:#0f2747">Log in</a>
+    <a class="btn big light" href="{% url 'password_reset' %}" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5)">Forgot password?</a>
+  </div>
+</div>
+<div class="grid3">
+  <div class="card"><div class="feat">📄</div><h3>1. Upload your CV</h3><p class="muted">The AI reads it and fills in your profile, education and experience for you.</p></div>
+  <div class="card"><div class="feat">🔎</div><h3>2. Get matching jobs</h3><p class="muted">Every morning at 8:00 AM it searches SEEK, Student Job Search and Trade Me Jobs for jobs that fit you.</p></div>
+  <div class="card"><div class="feat">✍️</div><h3>3. Apply with confidence</h3><p class="muted">Get an honest, NZ-style CV and cover letter for each job, plus interview practice.</p></div>
+  <div class="card"><div class="feat">📋</div><h3>4. Track everything</h3><p class="muted">See what you applied for, follow-ups due and interviews in one simple dashboard.</p></div>
+</div>
+<div class="card"><h3>Private and simple</h3><p class="muted" style="margin:0">Each person has their own private space. Only the admin can create accounts. No account yet? Please ask the admin for access.</p></div>
+{% endblock %}

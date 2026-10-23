@@ -1,5 +1,5 @@
 {% extends "agent/base.html" %}
 {% block content %}
 <div class="card"><h2>Edit CV: {{ cv.title }}</h2>
-<form method="post">{% csrf_token %}{{ form.as_p }}<button>Save</button> <a class="btn secondary" href="{% url 'candidate_profile' c.pk %}">Back</a></form></div>
+<form method="post">{% csrf_token %}{{ form.as_p }}<div class="row"><button>Save</button> <a class="btn light" href="{% url 'candidate_profile' c.pk %}">Back</a></div></form></div>
 {% endblock %}

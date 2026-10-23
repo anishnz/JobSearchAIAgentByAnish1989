@@ -4,7 +4,7 @@ Rules built in:
 - Only ONE candidate's CVs are ever sent in a prompt.
 - Job pages are untrusted text; the AI is told to ignore instructions inside them.
 - robots.txt is respected; login pages and CAPTCHAs are never bypassed.
-- Without an ANTHROPIC_API_KEY a free basic (keyword) fallback is used.
+- Each user uses their OWN Claude key. Without one (or if it fails) a free basic mode is used.
 """
 import hashlib
 import io
@@ -161,15 +161,25 @@ def search_job_sites(keyword, per_site=10):
     return results, notes
 
 
-# ---------------------------------------------------------------- Claude
-def claude_available():
-    return bool(settings.ANTHROPIC_API_KEY)
+# ---------------------------------------------------------------- Claude (per user key)
+def candidate_key(candidate):
+    """Return the Claude key this candidate may use ('' = basic mode)."""
+    if candidate is None or not candidate.ai_allowed:
+        return ""
+    key = candidate.ai_key
+    if not key and candidate.user.is_superuser:
+        key = settings.ANTHROPIC_API_KEY  # admin may also keep a key in .env
+    return key
 
 
-def ask_claude(prompt, max_tokens=2500):
+def claude_available(candidate=None):
+    return bool(candidate_key(candidate))
+
+
+def ask_claude(prompt, api_key, max_tokens=2500):
     import anthropic
 
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=api_key)
     msg = client.messages.create(
         model=settings.CLAUDE_MODEL,
         max_tokens=max_tokens,
@@ -180,24 +190,33 @@ def ask_claude(prompt, max_tokens=2500):
 
 
 def _ai_error_text(exc):
-    """Short, friendly reason why Claude could not be used."""
-    msg = str(exc)
-    if "credit balance" in msg.lower():
+    msg = str(exc).lower()
+    if "credit balance" in msg:
         return "Claude API has no credit"
-    if "authentication" in msg.lower() or "x-api-key" in msg.lower():
+    if "authentication" in msg or "x-api-key" in msg or "invalid api key" in msg:
         return "Claude API key is not valid"
     return f"Claude not reachable ({exc.__class__.__name__})"
 
 
-def with_fallback(ai_fn, basic_fn):
-    """Use Claude when a key is set; if it fails for any reason, use the free basic version."""
-    if not claude_available():
+def with_fallback(candidate, ai_fn, basic_fn):
+    """Use this candidate's Claude key; if missing or failing, use the free basic version."""
+    key = candidate_key(candidate)
+    if not key:
         return basic_fn(None)
     try:
-        return ai_fn()
+        return ai_fn(key)
     except Exception as exc:  # no credit, bad key, network problem, etc.
-        log.warning("Claude failed, using basic mode: %s", exc)
+        log.warning("Claude failed for %s, using basic mode: %s", candidate, exc)
         return basic_fn(_ai_error_text(exc))
+
+
+def test_ai_key(api_key):
+    """Return (ok, message) for the settings page."""
+    try:
+        ask_claude("Reply with the word OK.", api_key, max_tokens=5)
+        return True, "Claude key works."
+    except Exception as exc:
+        return False, _ai_error_text(exc)
 
 
 def _parse_json(text):
@@ -208,6 +227,15 @@ def _parse_json(text):
         return json.loads(match.group(0))
     except json.JSONDecodeError:
         return {}
+
+
+_WORD = re.compile(r"[a-z][a-z+#-]{2,}")
+_STOP = set("the and for with you your are our will have this that from who all can job jobs work team role "
+            "new zealand auckland full part time apply please about must able etc any per hour".split())
+
+
+def _words(text):
+    return {w for w in _WORD.findall((text or "").lower()) if w not in _STOP}
 
 
 def relevant_cvs(candidate, job, n=2):
@@ -234,7 +262,8 @@ def _candidate_block(candidate, job=None):
     return (
         f"CANDIDATE: {candidate.full_name}\nLocation: {candidate.location}\n"
         f"Wanted job types: {candidate.job_types}\nAvailability: {candidate.availability}\n"
-        f"Extra true facts: {candidate.extra_notes}\n"
+        f"Education: {candidate.education}\nExperience summary: {candidate.experience_summary}\n"
+        f"Skills: {candidate.skills}\nExtra true facts: {candidate.extra_notes}\n"
         f"Answered questions:\n{candidate.answered_facts() or '(none)'}\n\n"
         f"CVs (most relevant first):\n{cv_text or '(no CV uploaded yet)'}"
     )
@@ -245,25 +274,115 @@ def _job_block(job):
             f"Salary: {job.salary}\nURL: {job.url}\n\n{job.description[:12000]}\n</job_ad>")
 
 
-_WORD = re.compile(r"[a-z][a-z+#-]{2,}")
-_STOP = set("the and for with you your are our will have this that from who all can job jobs work team role "
-            "new zealand auckland full part time apply please about must able etc any per hour".split())
+# ---------------------------------------------------------------- CV analysis (first login)
+JOB_TYPE_KEYWORDS = {
+    "Kitchen Hand": ["kitchen", "chef", "cook", "restaurant", "food preparation", "catering"],
+    "Dishwasher": ["dishwash", "kitchen", "restaurant"],
+    "Cafe / Barista": ["barista", "coffee", "cafe"],
+    "Waiter / Food and Beverage": ["waiter", "waitress", "front of house", "hospitality", "bar"],
+    "Commercial Cleaner": ["clean", "janitor", "sanitis"],
+    "Housekeeper / Room Attendant": ["housekeep", "hotel", "room attendant", "laundry"],
+    "Retail Assistant": ["retail", "sales assistant", "shop", "store", "cashier", "merchandis"],
+    "Supermarket / Night Fill": ["supermarket", "grocery", "night fill", "shelf"],
+    "Warehouse Assistant": ["warehouse", "forklift", "picking", "packing", "logistics", "storeperson"],
+    "Customer Service": ["customer service", "call centre", "contact centre", "customer care", "reception"],
+    "Office / Admin Assistant": ["admin", "office", "data entry", "receptionist", "clerical"],
+    "Accounts Assistant": ["accounting", "accounts", "bookkeep", "xero", "myob", "finance", "payroll"],
+    "Caregiver / Support Worker": ["caregiver", "aged care", "disability", "support worker", "healthcare assistant"],
+    "Nurse": ["registered nurse", "nursing", "enrolled nurse"],
+    "Teacher Aide / Tutor": ["teacher", "tutor", "teaching", "lecturer", "school", "early childhood"],
+    "Childcare / ECE Assistant": ["childcare", "early childhood", "nanny", "kindergarten"],
+    "Driver / Delivery": ["driver", "delivery", "courier", "class 2", "licence"],
+    "Labourer / Construction": ["construction", "labourer", "building site", "carpentry"],
+    "IT Support Technician": ["it support", "helpdesk", "help desk", "network", "troubleshoot", "windows"],
+    "Software Developer": ["software", "developer", "python", "javascript", "php", "java", "programming"],
+    "Business Analyst": ["business analyst", "requirements", "stakeholder", "process improvement"],
+    "Marketing Assistant": ["marketing", "social media", "content", "seo", "digital marketing"],
+}
+
+_HEADINGS = {
+    "education": r"education|qualifications?|academic",
+    "experience": r"(work |professional |employment )?experience|employment( history)?|work history",
+    "skills": r"(key |core )?skills|competencies",
+}
 
 
-def _words(text):
-    return {w for w in _WORD.findall((text or "").lower()) if w not in _STOP}
+def _section(text, name):
+    lines = text.splitlines()
+    out, on = [], False
+    for line in lines:
+        clean = line.strip()
+        is_heading = bool(clean) and len(clean) < 40 and (clean.isupper() or clean.endswith(":"))
+        if is_heading and re.fullmatch(rf"\s*({_HEADINGS[name]})\s*:?\s*", clean, re.I):
+            on = True
+            continue
+        if on and is_heading:
+            break
+        if on and clean:
+            out.append(clean)
+    return "\n".join(out[:25])
 
 
+def basic_cv_analysis(text):
+    """Free (no AI) CV reader: contact details, sections and job types that fit."""
+    low = text.lower()
+    email = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", text)
+    phone = re.search(r"(\+64|0)[\s-]?\d{1,2}[\s-]?\d{3}[\s-]?\d{3,4}", text)
+    first = next((l.strip() for l in text.splitlines() if l.strip()), "")
+    scores = {jt: sum(low.count(k) for k in kws) for jt, kws in JOB_TYPE_KEYWORDS.items()}
+    suggested = [jt for jt, sc in sorted(scores.items(), key=lambda x: -x[1]) if sc > 0][:8]
+    if not suggested:
+        suggested = ["Customer Service", "Retail Assistant", "Warehouse Assistant", "Commercial Cleaner"]
+    return {
+        "full_name": first.title() if 1 < len(first.split()) <= 4 and not any(ch.isdigit() for ch in first) else "",
+        "email": email.group(0) if email else "",
+        "phone": phone.group(0) if phone else "",
+        "location": "Auckland" if "auckland" in low else "",
+        "education": _section(text, "education"),
+        "experience": _section(text, "experience"),
+        "skills": _section(text, "skills").replace("\n", ", "),
+        "suggested_job_types": suggested,
+        "questions": [],
+        "mode": "basic",
+    }
+
+
+def analyse_cv(candidate, text):
+    """Read a CV and suggest profile details and job types that fit THIS person."""
+    def basic(err):
+        data = basic_cv_analysis(text)
+        if err:
+            data["note"] = f"{err} - basic reader used."
+        return data
+
+    def ai(key):
+        prompt = (f"Here is a CV for a job seeker in Auckland, New Zealand.\n<cv>\n{text[:15000]}\n</cv>\n\n"
+                  "Read it and reply with JSON only:\n"
+                  '{"full_name":"","email":"","phone":"","location":"",'
+                  '"education":"short list of qualifications","experience":"short summary of work history",'
+                  '"skills":"comma separated","suggested_job_types":["6-10 realistic job types in Auckland that fit '
+                  'this person\'s real education and experience, including entry-level/part-time roles if suitable"],'
+                  '"questions":["up to 3 questions about missing true information that would help the job search"]}')
+        data = _parse_json(ask_claude(prompt, key, max_tokens=1500))
+        if not data:
+            raise ValueError("AI reply could not be read")
+        data["mode"] = "ai"
+        return data
+
+    return with_fallback(candidate, ai, basic)
+
+
+# ---------------------------------------------------------------- scoring and documents
 def keyword_score(candidate, job):
     """Free fallback when no Claude key is set."""
     job_words = _words(f"{job.title} {job.description}")
     if not job_words:
         return 0, "No job description yet - open the job link or paste the description, then score again."
     cv_text = " ".join(f"{cv.title} {cv.best_for} {cv.text}" for cv in relevant_cvs(candidate, job))
-    overlap = _words(f"{candidate.job_types} {cv_text}") & job_words
+    overlap = _words(f"{candidate.job_types} {candidate.skills} {cv_text}") & job_words
     title_hit = any(k.lower() in job.title.lower() for k in candidate.keyword_list())
     score = min(100, len(overlap) * 3 + (35 if title_hit else 0))
-    reason = (f"Basic keyword match (no AI key set). Matching words: {', '.join(sorted(overlap)[:15]) or 'none'}."
+    reason = (f"Basic keyword match. Matching words: {', '.join(sorted(overlap)[:15]) or 'none'}."
               + (" Job title matches a wanted job type." if title_hit else ""))
     return score, reason
 
@@ -276,58 +395,55 @@ def score_job(candidate, job):
             reason = f"{err} - basic matching used.\n{reason}"
         return score, reason, []
 
-    return with_fallback(lambda: _score_job_ai(candidate, job), basic)
+    def ai(key):
+        prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
+                  "Rate how suitable this job is for this candidate (0-100), considering essential requirements, "
+                  "education, experience, availability, location and the chance of getting an interview. "
+                  "Reply with JSON only:\n"
+                  '{"score": 0, "reason": "2-4 short sentences", "improve": "one tip", '
+                  '"questions": ["question to ask the candidate about missing true information"]}')
+        data = _parse_json(ask_claude(prompt, key, max_tokens=800))
+        score = max(0, min(100, int(data.get("score", 0) or 0)))
+        reason = f"{data.get('reason', '')}\nTip: {data.get('improve', '')}".strip()
+        questions = [q for q in data.get("questions", []) if isinstance(q, str) and q.strip()][:3]
+        return score, reason, questions
 
-
-def _score_job_ai(candidate, job):
-    prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
-              "Rate how suitable this job is for this candidate (0-100), considering essential requirements, "
-              "availability, location and the chance of getting an interview. Reply with JSON only:\n"
-              '{"score": 0, "reason": "2-4 short sentences", "improve": "one tip", '
-              '"questions": ["question to ask the candidate about missing true information"]}')
-    data = _parse_json(ask_claude(prompt, max_tokens=800))
-    score = max(0, min(100, int(data.get("score", 0) or 0)))
-    reason = f"{data.get('reason', '')}\nTip: {data.get('improve', '')}".strip()
-    questions = [q for q in data.get("questions", []) if isinstance(q, str) and q.strip()][:3]
-    return score, reason, questions
+    return with_fallback(candidate, ai, basic)
 
 
 def generate_documents(candidate, job):
     """Return dict with cv, cover_letter, email."""
-    return with_fallback(lambda: _generate_documents_ai(candidate, job),
-                         lambda err: _generate_documents_basic(candidate, job, err))
+    def basic(err):
+        chosen = relevant_cvs(candidate, job, n=1)
+        base_cv = chosen[0] if chosen else None
+        return {
+            "cv": base_cv.text if base_cv else "",
+            "cover_letter": (f"Dear Hiring Manager,\n\nI am applying for the {job.title} role"
+                             f"{' at ' + job.company if job.company else ''}. [Add 2-3 sentences about your "
+                             f"relevant experience.]\n\nMy availability: {candidate.availability}\n\n"
+                             f"Kind regards,\n{candidate.full_name}\n{candidate.phone}\n{candidate.email}"),
+            "email": (f"Subject: Application - {job.title}\n\nKia ora,\n\nPlease find my CV and cover letter "
+                      f"attached for the {job.title} role.\n\nNgā mihi,\n{candidate.full_name}"),
+        }
 
+    def ai(key):
+        prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
+                  "Write, for THIS job only:\n"
+                  "1) A one-page NZ-style ATS-friendly CV in plain text that includes only relevant true experience.\n"
+                  "2) A short cover letter (under 250 words).\n3) A short application email with a subject line.\n"
+                  "Where a fact is missing, write [ADD: what is needed] instead of guessing.\n"
+                  "Use exactly these separators on their own lines:\n===CV===\n===COVER LETTER===\n===EMAIL===")
+        text = ask_claude(prompt, key, max_tokens=3500)
+        parts = re.split(r"^===\s*(CV|COVER LETTER|EMAIL)\s*===\s*$", text, flags=re.M | re.I)
+        out = {"cv": "", "cover_letter": "", "email": ""}
+        keys = {"cv": "cv", "cover letter": "cover_letter", "email": "email"}
+        for i in range(1, len(parts) - 1, 2):
+            out[keys[parts[i].lower()]] = parts[i + 1].strip()
+        if not any(out.values()):
+            out["cv"] = text
+        return out
 
-def _generate_documents_basic(candidate, job, err=None):
-    chosen = relevant_cvs(candidate, job, n=1)
-    base_cv = chosen[0] if chosen else None
-    return {
-        "cv": base_cv.text if base_cv else "",
-        "cover_letter": (f"Dear Hiring Manager,\n\nI am applying for the {job.title} role"
-                         f"{' at ' + job.company if job.company else ''}. [Add 2-3 sentences about your "
-                         f"relevant experience.]\n\nMy availability: {candidate.availability}\n\n"
-                         f"Kind regards,\n{candidate.full_name}\n{candidate.phone}\n{candidate.email}"),
-        "email": (f"Subject: Application - {job.title}\n\nKia ora,\n\nPlease find my CV and cover letter "
-                  f"attached for the {job.title} role.\n\nNgā mihi,\n{candidate.full_name}"),
-    }
-
-
-def _generate_documents_ai(candidate, job):
-    prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
-              "Write, for THIS job only:\n"
-              "1) A one-page NZ-style ATS-friendly CV in plain text that includes only relevant true experience.\n"
-              "2) A short cover letter (under 250 words).\n3) A short application email with a subject line.\n"
-              "Where a fact is missing, write [ADD: what is needed] instead of guessing.\n"
-              "Use exactly these separators on their own lines:\n===CV===\n===COVER LETTER===\n===EMAIL===")
-    text = ask_claude(prompt, max_tokens=3500)
-    parts = re.split(r"^===\s*(CV|COVER LETTER|EMAIL)\s*===\s*$", text, flags=re.M | re.I)
-    out = {"cv": "", "cover_letter": "", "email": ""}
-    keys = {"cv": "cv", "cover letter": "cover_letter", "email": "email"}
-    for i in range(1, len(parts) - 1, 2):
-        out[keys[parts[i].lower()]] = parts[i + 1].strip()
-    if not any(out.values()):
-        out["cv"] = text
-    return out
+    return with_fallback(candidate, ai, basic)
 
 
 def youtube_search_links(job_title):
@@ -339,21 +455,21 @@ def youtube_search_links(job_title):
 
 def interview_prep(candidate, job):
     links = "\n".join(f"- {t}: {u}" for t, u in youtube_search_links(job.title))
+
     def basic(err):
         note = f"({err} - basic version shown.)\n\n" if err else ""
         return note + ("Common questions:\n- Tell me about yourself.\n- Why do you want this job?\n"
-                "- What is your availability?\n- Tell me about a time you worked in a team.\n"
-                "- How do you handle a busy shift?\n\n(Add an ANTHROPIC_API_KEY for job-specific questions "
-                "and sample answers based on your CV.)")
+                       "- What is your availability?\n- Tell me about a time you worked in a team.\n"
+                       "- How do you handle a busy shift?\n\n(Add your Claude key in Settings for job-specific "
+                       "questions and sample answers based on your CV.)")
 
-    def ai():
+    def ai(key):
         return ask_claude(
             f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\nPrepare interview practice for this job: "
             "10 likely questions, a short sample answer for each using ONLY the candidate's true background, "
-            "3 good questions to ask the employer, and 3 tips. Plain text with headings.", max_tokens=3000)
+            "3 good questions to ask the employer, and 3 tips. Plain text with headings.", key, max_tokens=3000)
 
-    body = with_fallback(ai, basic)
-    return f"{body}\n\nVIDEO PRACTICE (YouTube searches)\n{links}"
+    return f"{with_fallback(candidate, ai, basic)}\n\nVIDEO PRACTICE (YouTube searches)\n{links}"
 
 
 def daily_insight(candidate, stats):
@@ -369,13 +485,55 @@ def daily_insight(candidate, stats):
             tips.append(f"You have {stats['follow_ups_due']} follow-up(s) due - send a short polite email.")
         return " ".join(tips) or "Good progress. Keep applying to the top suggested jobs."
 
-    return with_fallback(lambda: _daily_insight_ai(candidate, summary), basic)
+    def ai(key):
+        recent = "\n".join(f"- {j.title} ({j.site or j.company}) score {j.match_score}"
+                           for j in candidate.jobs.exclude(match_score=None)[:15])
+        return ask_claude(f"Candidate: {candidate.full_name}\nWanted: {candidate.job_types}\nStats: {summary}\n"
+                          f"Recent scored jobs:\n{recent or '(none)'}\n\nGive a short, encouraging daily job-search "
+                          "summary (max 6 bullet points): what to apply for first, follow-ups, and one improvement.",
+                          key, max_tokens=600)
+
+    return with_fallback(candidate, ai, basic)
 
 
-def _daily_insight_ai(candidate, summary):
-    recent = "\n".join(f"- {j.title} ({j.site or j.company}) score {j.match_score}"
-                       for j in candidate.jobs.exclude(match_score=None)[:15])
-    return ask_claude(f"Candidate: {candidate.full_name}\nWanted: {candidate.job_types}\nStats: {summary}\n"
-                      f"Recent scored jobs:\n{recent or '(none)'}\n\nGive a short, encouraging daily job-search "
-                      "summary (max 6 bullet points): what to apply for first, follow-ups, and one improvement.",
-                      max_tokens=600)
+# ---------------------------------------------------------------- Gmail and WhatsApp
+def gmail_connection(address, app_password):
+    from django.core.mail import get_connection
+
+    return get_connection("django.core.mail.backends.smtp.EmailBackend", host="smtp.gmail.com", port=587,
+                          username=address, password=app_password, use_tls=True, timeout=20)
+
+
+def send_gmail(address, app_password, to, subject, body, attachments=()):
+    """Send one email through the user's own Gmail (App Password). attachments: (filename, bytes, mimetype)."""
+    from django.core.mail import EmailMessage
+
+    msg = EmailMessage(subject=subject, body=body, from_email=address, to=[to],
+                       connection=gmail_connection(address, app_password))
+    for name, data, mime in attachments:
+        msg.attach(name, data, mime)
+    msg.send(fail_silently=False)
+
+
+def test_gmail(address, app_password):
+    try:
+        send_gmail(address, app_password, address, "Job Search AI Agent - Gmail test",
+                   "Your Gmail is connected to the Job Search AI Agent.")
+        return True, f"Test email sent to {address}."
+    except Exception as exc:
+        text = str(exc)
+        if "Username and Password not accepted" in text or "535" in text:
+            return False, "Gmail did not accept the address or App Password."
+        return False, f"Could not connect to Gmail ({exc.__class__.__name__})."
+
+
+def split_email_draft(draft, default_subject):
+    """Return (subject, body) from an email draft that may start with 'Subject: ...'."""
+    lines = (draft or "").strip().splitlines()
+    if lines and lines[0].lower().startswith("subject:"):
+        return lines[0].split(":", 1)[1].strip() or default_subject, "\n".join(lines[1:]).strip()
+    return default_subject, (draft or "").strip()
+
+
+def whatsapp_link(text):
+    return "https://wa.me/?text=" + quote_plus(text)

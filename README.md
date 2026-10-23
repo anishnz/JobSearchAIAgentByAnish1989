@@ -41,7 +41,23 @@ copy .env.example .env        # then open .env and set DJANGO_SECRET_KEY and ANT
 docker compose up -d --build
 docker compose exec web python manage.py createsuperuser   # your admin login (one time)
 ```
-Open **http://localhost:8010** (port set by `APP_PORT` in `.env`; 8000 is left free for the ERP) and log in. Click **Give access** to add a user (e.g. SaruTuitui).
+Open **http://localhost:8010** (port set by `APP_PORT` in `.env`; 8000 is left free for the ERP) and log in.
+
+### Personal links
+Each user has a personal link name (e.g. `sarucv`):
+- On the laptop: `http://sarucv.localhost:8010`
+- From phones/laptops on the same home Wi-Fi: `http://<laptop-ip>:8010/u/sarucv/` (start.bat shows the laptop's address)
+
+### How it works for each user
+1. The admin adds the user (**Users & access -> Add a user**).
+2. On first login the user uploads a CV. The AI (or the free basic reader) fills in education, experience and skills and suggests job types that fit **that person's** background.
+3. The user confirms, then uses **Search jobs now**; the daily 8:00 AM search runs for every active, not-paused user.
+4. **Settings**: each user adds their own Claude API key (optional; otherwise free basic mode) and Gmail App Password (optional; to send approved applications). WhatsApp share buttons need no setup.
+
+### Super admin
+- **Users & access**: add users, turn logins on/off, set passwords, allow/deny AI, Gmail and auto mode.
+- **System health**: database, scheduler heartbeat, last daily run, disk, system email, job websites.
+- **System settings**: Gmail App Password used for "Forgot password" emails.
 
 Useful commands:
 ```powershell

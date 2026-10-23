@@ -63,6 +63,8 @@ pause
 exit /b 1
 :port_ok
 echo Using port %APP_PORT%.
+set HOST_LAN_IP=
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -ExecutionPolicy Bypass -File "docker\lan_ip.ps1"`) do set HOST_LAN_IP=%%i
 
 REM ---- 4. Build and start the containers
 echo.
@@ -99,6 +101,8 @@ start "" http://localhost:%APP_PORT%
 echo.
 echo ============================================
 echo   Running at http://localhost:%APP_PORT%
+echo   Personal links on this laptop: http://NAMEcv.localhost:%APP_PORT%
+if defined HOST_LAN_IP echo   From phones/laptops at home: http://%HOST_LAN_IP%:%APP_PORT%
 echo   Daily job search: 8:00 AM Auckland time
 echo   To stop: double-click stop.bat
 echo ============================================

@@ -1,0 +1,18 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>Manage {{ c.full_name }}</h1><p>Login: {{ c.user.username }} · last login {{ c.user.last_login|default:"never" }}</p></div>
+<a class="btn light" href="{% url 'candidate_dashboard' c.pk %}">Open their dashboard</a></div>
+<div class="grid">
+  <div class="card"><h2>Access and permissions</h2>
+    <form method="post">{% csrf_token %}{{ form.as_p }}<p style="margin-top:12px"><button class="big">Save</button></p></form></div>
+  <div>
+    <div class="card"><h2>Personal link</h2><p class="small">On the laptop: <span class="link">{{ links.laptop }}</span>{% if links.home %}<br>From other devices at home: <span class="link">{{ links.home }}</span>{% endif %}</p></div>
+    <div class="card"><h2>Their settings</h2>
+      <p>Claude key: {% if has_ai_key %}<span class="badge ok">saved</span>{% else %}<span class="badge">none - free basic mode</span>{% endif %}</p>
+      <p>Gmail: {% if has_gmail %}<span class="badge ok">ready</span>{% else %}<span class="badge">not set up</span>{% endif %}</p>
+      <p>Auto mode: {% if c.auto_enabled %}<span class="badge blue">{{ c.get_auto_mode_display }}</span>{% else %}<span class="badge">off</span>{% endif %}</p>
+      <p>Daily search: {% if c.search_paused %}<span class="badge warn">paused by user</span>{% else %}<span class="badge ok">on</span>{% endif %}</p>
+      <p class="muted small">Keys and passwords are private and never shown.</p></div>
+  </div>
+</div>
+{% endblock %}

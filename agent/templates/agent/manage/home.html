@@ -1,0 +1,29 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>Users &amp; access</h1><p>Super admin dashboard</p></div><a class="btn big" href="{% url 'manage_user_new' %}">+ Add a user</a></div>
+<div class="stats">
+  <div class="stat blue"><b>{{ totals.users }}</b><span>Users</span></div>
+  <div class="stat green"><b>{{ totals.jobs_today }}</b><span>Jobs found today</span></div>
+  <div class="stat purple"><b>{{ totals.applied }}</b><span>Applications sent</span></div>
+  <div class="stat orange"><b>{{ totals.interviews }}</b><span>Interviews</span></div>
+  <a class="stat" href="{% url 'manage_health' %}" style="text-decoration:none;color:inherit"><b>{% if health.scheduler_ok %}✅{% else %}⚠️{% endif %}</b><span>Daily scheduler {% if health.scheduler_ok %}running{% else %}- check health{% endif %}</span></a>
+</div>
+{% if not health.email_ok %}<div class="msg warning">"Forgot password" emails are not set up. Add your Gmail in <a href="{% url 'manage_settings' %}">System settings</a>.</div>{% endif %}
+<div class="card"><table>
+  <tr><th>User</th><th>Personal link</th><th>CVs</th><th>Today</th><th>Matches</th><th>Applied</th><th>Access</th><th></th></tr>
+  {% for c, links in rows %}
+  <tr>
+    <td><b>{{ c.full_name }}</b><br><span class="muted small">{{ c.user.username }}{% if c.user.is_superuser %} · admin{% endif %}</span></td>
+    <td><a class="small" href="{{ links.laptop }}" target="_blank">{{ links.laptop }}</a>{% if links.home %}<br><span class="muted small">{{ links.home }}</span>{% endif %}</td>
+    <td>{{ c.cv_count }}</td><td>{{ c.jobs_today }}</td><td>{{ c.suggested }}</td><td>{{ c.applied }}</td>
+    <td>{% if c.user.is_active %}<span class="badge ok">login on</span>{% else %}<span class="badge bad">login off</span>{% endif %}
+        {% if c.search_paused %}<span class="badge warn">paused</span>{% endif %}
+        {% if c.ai_key_enc and c.ai_allowed %}<span class="badge blue">AI</span>{% endif %}
+        {% if not c.onboarding_done %}<span class="badge">new</span>{% endif %}</td>
+    <td class="row"><a class="btn light" href="{% url 'manage_user_edit' c.pk %}">Manage</a><a class="btn light" href="{% url 'candidate_dashboard' c.pk %}">View</a></td>
+  </tr>
+  {% empty %}<tr><td colspan="8" class="muted">No users yet.</td></tr>{% endfor %}
+</table></div>
+<div class="card"><h2>Recent activity</h2><table>{% for l in recent_log %}<tr><td class="muted small">{{ l.created_at|date:"d M H:i" }}</td><td>{{ l.actor|default:"system" }}</td><td>{{ l.candidate|default:"" }}</td><td>{{ l.action }}</td></tr>{% endfor %}</table>
+<a class="small" href="{% url 'manage_audit' %}">Full activity log</a></div>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>Activity log</h1><p>Who did what, and when.</p></div></div>
+<div class="card"><table>
+<tr><th>Time</th><th>Who</th><th>User record</th><th>Action</th><th>Detail</th></tr>
+{% for l in logs %}<tr><td class="muted small">{{ l.created_at|date:"d M Y H:i" }}</td><td>{{ l.actor|default:"system" }}</td><td>{{ l.candidate|default:"" }}</td><td>{{ l.action }}</td><td class="muted small">{{ l.detail|truncatechars:160 }}</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

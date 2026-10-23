@@ -1,35 +1,40 @@
 {% extends "agent/base.html" %}
 {% block content %}
-{% if not c.cvs.exists %}<div class="msg warning">Step 1: <a href="{% url 'candidate_profile' c.pk %}">upload at least one CV</a> and add the job types you want.</div>{% endif %}
+<div class="top">
+  <div><h1>Kia ora, {{ c.first_name }}</h1><p>{% now "l j F Y" %} · Daily search {% if c.search_paused %}<span class="badge warn">paused</span>{% else %}<span class="badge ok">on - every day at 8:00 AM</span>{% endif %}</p></div>
+  <div class="row">
+    <form method="post" action="{% url 'jobs' c.pk %}">{% csrf_token %}<input type="hidden" name="action" value="search"><button class="big">🔎 Search jobs now</button></form>
+    <form method="post">{% csrf_token %}{% if c.search_paused %}<input type="hidden" name="action" value="resume"><button class="big green">▶ Resume daily search</button>{% else %}<input type="hidden" name="action" value="pause"><button class="big light">⏸ Pause daily search</button>{% endif %}</form>
+  </div>
+</div>
+{% if not ai_on %}<div class="msg warning">AI is off for you - free basic matching is used. To use AI, add your own Claude key in <a href="{% url 'candidate_settings' c.pk %}">Settings</a>.</div>{% endif %}
 <div class="stats">
-  <div class="stat"><b>{{ stats.jobs_today }}</b><span>Jobs found today</span></div>
-  <div class="stat"><b>{{ stats.suggested_today }}</b><span>AI suggested today</span></div>
-  <div class="stat"><b>{{ stats.drafts }}</b><span>Applications to review</span></div>
-  <div class="stat"><b>{{ stats.applied }}</b><span>Applied (total)</span></div>
-  <div class="stat"><b>{{ stats.applied_today }}</b><span>Applied today</span></div>
-  <div class="stat"><b>{{ stats.interviews }}</b><span>Interviews</span></div>
-  <div class="stat"><b>{{ stats.follow_ups_due }}</b><span>Follow-ups due</span></div>
-  <div class="stat"><b>{{ stats.open_questions }}</b><span><a href="{% url 'questions' c.pk %}">AI questions for you</a></span></div>
+  <div class="stat blue"><b>{{ stats.jobs_today }}</b><span>Jobs found today</span></div>
+  <div class="stat green"><b>{{ stats.suggested_today }}</b><span>Good matches today</span></div>
+  <div class="stat orange"><b>{{ stats.drafts }}</b><span>Applications to check</span></div>
+  <div class="stat purple"><b>{{ stats.applied }}</b><span>Applied (total) · {{ stats.applied_today }} today</span></div>
+  <div class="stat green"><b>{{ stats.interviews }}</b><span>Interviews</span></div>
+  <div class="stat orange"><b>{{ stats.follow_ups_due }}</b><span>Follow-ups due</span></div>
 </div>
 <div class="grid">
   <div class="card">
-    <h2>Search jobs now</h2>
-    <form method="post" action="{% url 'jobs' c.pk %}">{% csrf_token %}<input type="hidden" name="action" value="search">
-      {{ search_form.keywords }}<p class="muted">Automatic search runs every day at 8:00 AM (Auckland time). Last search: {{ c.last_search_at|default:"never" }}</p>
-      <button>Search jobs</button></form>
+    <div class="row" style="justify-content:space-between"><h2>Best jobs for you</h2><a class="small" href="{% url 'jobs' c.pk %}?status=suggested">See all</a></div>
+    {% for j in top_jobs %}<div class="jobcard">{% include "agent/_score.html" with s=j.match_score %}<div class="t"><a href="{% url 'job_detail' c.pk j.pk %}">{{ j.title }}</a><div class="muted small">{{ j.company|default:j.site }} · found {{ j.found_at|date:"d M" }}</div></div><a class="btn light" href="{% url 'job_detail' c.pk j.pk %}">Open</a></div>
+    {% empty %}<p class="muted">No matches yet. Click <b>Search jobs now</b>.</p>{% endfor %}
   </div>
-  <div class="card">
-    <h2>AI daily summary</h2>
-    {% if c.last_insight %}<pre>{{ c.last_insight }}</pre><p class="muted">Updated {{ c.last_insight_at }}</p>{% else %}<p class="muted">No summary yet.</p>{% endif %}
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="insight"><button class="secondary">{% if ai_on %}Ask AI for today's summary{% else %}Get basic summary{% endif %}</button></form>
+  <div>
+    <div class="card">
+      <h2>💡 Today's plan</h2>
+      {% if c.last_insight %}<pre>{{ c.last_insight }}</pre><p class="muted small">Updated {{ c.last_insight_at|date:"d M H:i" }}</p>{% else %}<p class="muted">Get a short plan for today.</p>{% endif %}
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="insight"><button class="light">Make today's plan</button></form>
+    </div>
+    {% if follow_ups %}<div class="card"><h2>⏰ Follow-ups due</h2>
+      {% for a in follow_ups %}<div class="jobcard"><div class="t"><a href="{% url 'job_detail' c.pk a.job.pk %}">{{ a.job.title }}</a><div class="muted small">{{ a.job.company }} · due {{ a.follow_up_date|date:"d M" }}</div></div></div>{% endfor %}</div>{% endif %}
+    {% if stats.open_questions %}<div class="card"><h2>💬 The AI has {{ stats.open_questions }} question(s) for you</h2><a class="btn" href="{% url 'questions' c.pk %}">Answer now</a></div>{% endif %}
+    <div class="card"><h3>Your personal link</h3>
+      <p class="small">On this laptop: <span class="link">{{ links.laptop }}</span></p>
+      {% if links.home %}<p class="small">From phone / other devices at home: <span class="link">{{ links.home }}</span></p>{% endif %}
+    </div>
   </div>
 </div>
-<div class="card">
-  <h2>Top suggested jobs</h2>
-  <table><tr><th>Score</th><th>Job</th><th>Site</th><th>Found</th></tr>
-  {% for j in top_jobs %}<tr><td>{% include "agent/_score.html" with s=j.match_score %}</td><td><a href="{% url 'job_detail' c.pk j.pk %}">{{ j.title }}</a> <span class="muted">{{ j.company }}</span></td><td>{{ j.site|default:j.get_source_display }}</td><td class="muted">{{ j.found_at|date:"d M" }}</td></tr>
-  {% empty %}<tr><td colspan="4" class="muted">No suggestions yet. Run a search or add a job.</td></tr>{% endfor %}</table>
-</div>
-{% if follow_ups %}<div class="card"><h2>Follow-ups due</h2><table>
-{% for a in follow_ups %}<tr><td><a href="{% url 'job_detail' c.pk a.job.pk %}">{{ a.job.title }}</a></td><td>{{ a.job.company }}</td><td>due {{ a.follow_up_date }}</td></tr>{% endfor %}</table></div>{% endif %}
 {% endblock %}

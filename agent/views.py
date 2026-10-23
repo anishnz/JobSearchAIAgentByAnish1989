@@ -1,36 +1,27 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
-from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
 from . import services, workflow
-from .forms import (ApplicationForm, CandidateCreateForm, CandidateProfileForm, CVForm, JobPasteForm,
-                    JobURLForm, SearchForm)
-from .models import AIQuestion, Application, AuditLog, Candidate, CVDocument, Job
+from .forms import (ApplicationForm, CandidateProfileForm, CVForm, JobPasteForm, JobURLForm, SearchForm,
+                    UserSettingsForm, WelcomeCVForm, WelcomeReviewForm)
+from .models import AIQuestion, Application, AuditLog, Candidate, CVDocument, Job, SystemSettings
 
 CLOSED = ["offer", "rejected", "withdrawn"]
 
 
 # ------------------------------------------------------------------ helpers
-def admin_required(view):
-    @login_required
-    def wrapper(request, *args, **kwargs):
-        if not request.user.is_staff:
-            raise PermissionDenied
-        return view(request, *args, **kwargs)
-    return wrapper
-
-
 def get_candidate(request, cid):
-    """A user can only open their own candidate. The admin can open any (and it is logged)."""
+    """A user can only open their own space. The admin can open any (and it is logged)."""
     candidate = get_object_or_404(Candidate, pk=cid)
     if candidate.user_id == request.user.id:
         return candidate
@@ -44,8 +35,8 @@ def get_candidate(request, cid):
     raise PermissionDenied
 
 
-def run_ai(request, label, fn, *args):
-    """Run an AI/network step and show a friendly message if it fails."""
+def run_step(request, label, fn, *args):
+    """Run a network/AI step and show a friendly message if it fails."""
     try:
         return fn(*args)
     except PermissionError as exc:
@@ -53,6 +44,16 @@ def run_ai(request, label, fn, *args):
     except Exception as exc:
         messages.error(request, f"{label} failed: {exc.__class__.__name__}: {str(exc)[:200]}")
     return None
+
+
+def personal_links(request, candidate):
+    port = request.get_port()
+    port_part = "" if port in ("80", "443") else f":{port}"
+    links = {"laptop": f"http://{candidate.slug}.localhost{port_part}/"}
+    lan_ip = settings.HOST_LAN_IP
+    if lan_ip:
+        links["home"] = f"http://{lan_ip}:{settings.APP_PORT}/u/{candidate.slug}/"
+    return links
 
 
 def candidate_stats(candidate):
@@ -73,92 +74,197 @@ def candidate_stats(candidate):
     }
 
 
-# ------------------------------------------------------------------ help
-@login_required
-def help_page(request):
-    own = Candidate.objects.filter(user=request.user).first()
-    return render(request, "agent/help.html", {"own": own, "ai_on": services.claude_available()})
+# ------------------------------------------------------------------ public pages
+def landing(request):
+    if request.portal:
+        return portal(request, request.portal.slug)
+    if request.user.is_authenticated:
+        return redirect("home")
+    return render(request, "agent/landing.html")
 
 
-# ------------------------------------------------------------------ home / admin
+def portal(request, slug):
+    candidate = get_object_or_404(Candidate, slug=slug)
+    if request.user.is_authenticated:
+        if request.user.id == candidate.user_id or request.user.is_staff:
+            return redirect("candidate_dashboard", cid=candidate.pk)
+        return redirect("home")
+    form = auth_views.AuthenticationForm(request, initial={"username": candidate.user.username})
+    return render(request, "agent/login.html", {"form": form, "portal_candidate": candidate,
+                                                "next": reverse("candidate_dashboard", args=[candidate.pk])})
+
+
+class LoginView(auth_views.LoginView):
+    template_name = "agent/login.html"
+    redirect_authenticated_user = True
+
+
+class PasswordResetView(auth_views.PasswordResetView):
+    template_name = "agent/password_reset.html"
+    email_template_name = "agent/email/password_reset_email.txt"
+    subject_template_name = "agent/email/password_reset_subject.txt"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["email_ready"] = SystemSettings.load().email_ready
+        return ctx
+
+    def form_valid(self, form):
+        try:
+            return super().form_valid(form)
+        except Exception:
+            messages.error(self.request, "The reset email could not be sent. Please ask the admin to reset your password.")
+            return redirect("password_reset")
+
+
 @login_required
 def home(request):
-    if not request.user.is_staff:
-        candidate = Candidate.objects.filter(user=request.user).first()
-        if candidate:
-            return redirect("candidate_dashboard", cid=candidate.pk)
-        return render(request, "agent/no_access.html")
-    today = timezone.localdate()
-    candidates = Candidate.objects.annotate(
-        jobs_today=Count("jobs", filter=Q(jobs__found_at__date=today), distinct=True),
-        suggested=Count("jobs", filter=Q(jobs__status="suggested"), distinct=True),
-        applied=Count("applications", filter=Q(applications__status__in=["applied", "interview", "offer", "rejected"]), distinct=True),
-        interviews=Count("applications", filter=Q(applications__status="interview"), distinct=True),
-    )
-    totals = {
-        "users": candidates.count(),
-        "jobs_today": Job.objects.filter(found_at__date=today).count(),
-        "applied": Application.objects.filter(status__in=["applied", "interview", "offer", "rejected"]).count(),
-        "interviews": Application.objects.filter(status="interview").count(),
-    }
-    return render(request, "agent/home.html", {"candidates": candidates, "totals": totals,
-                                               "ai_on": services.claude_available(),
-                                               "recent_log": AuditLog.objects.all()[:10]})
+    candidate = Candidate.objects.filter(user=request.user).first()
+    if request.user.is_staff and (candidate is None or request.GET.get("admin")):
+        return redirect("manage_home")
+    if candidate:
+        return redirect("candidate_dashboard", cid=candidate.pk)
+    return render(request, "agent/no_access.html")
 
 
-@admin_required
-def candidate_new(request):
-    form = CandidateCreateForm(request.POST or None)
+@login_required
+def help_page(request):
+    return render(request, "agent/help.html")
+
+
+# ------------------------------------------------------------------ first login: CV -> AI analysis -> confirm
+@login_required
+def welcome(request, cid):
+    candidate = get_candidate(request, cid)
+    form = WelcomeCVForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        d = form.cleaned_data
-        with transaction.atomic():
-            user = User.objects.create_user(d["username"], email=d["email"], password=d["password"],
-                                            first_name=d["full_name"][:150])
-            candidate = Candidate.objects.create(user=user, full_name=d["full_name"], email=d["email"],
-                                                 phone=d["phone"], job_types=d["job_types"])
-        AuditLog.log("user_created", f"Access given to {candidate.full_name} ({user.username})",
-                     actor=request.user, candidate=candidate)
-        messages.success(request, f"Access created for {candidate.full_name}. Next: upload their CVs.")
-        return redirect("candidate_profile", cid=candidate.pk)
-    return render(request, "agent/candidate_new.html", {"form": form})
+        upload, text = form.cleaned_data.get("file"), form.cleaned_data.get("text", "").strip()
+        if upload:
+            try:
+                text = services.extract_text_from_upload(upload) or text
+            except Exception:
+                messages.warning(request, "Could not read the file. Please paste your CV text instead.")
+                return redirect("welcome", cid=cid)
+        if len(text) < 80:
+            messages.error(request, "The CV text is too short. Please check the file or paste the text.")
+            return redirect("welcome", cid=cid)
+        cv = CVDocument.objects.create(candidate=candidate, title="My CV", text=text,
+                                       uploaded_file=upload or "")
+        analysis = services.analyse_cv(candidate, text)
+        request.session[f"analysis_{cid}"] = analysis
+        AuditLog.log("cv_analysed", f"mode={analysis.get('mode')}", actor=request.user, candidate=candidate)
+        if analysis.get("note"):
+            messages.info(request, analysis["note"])
+        workflow.add_questions(candidate, None, analysis.get("questions") or [])
+        if cv:
+            return redirect("welcome_review", cid=cid)
+    return render(request, "agent/welcome.html", {"c": candidate, "form": form, "step": 1,
+                                                  "ai_on": services.claude_available(candidate)})
 
 
-@admin_required
-def candidate_toggle_access(request, cid):
-    candidate = get_object_or_404(Candidate, pk=cid)
-    if request.method == "POST" and candidate.user_id != request.user.id:
-        candidate.user.is_active = not candidate.user.is_active
-        candidate.user.save(update_fields=["is_active"])
-        state = "enabled" if candidate.user.is_active else "disabled"
-        AuditLog.log(f"access_{state}", candidate.full_name, actor=request.user, candidate=candidate)
-        messages.success(request, f"Login {state} for {candidate.full_name}.")
-    return redirect("home")
-
-
-@admin_required
-def audit(request):
-    return render(request, "agent/audit.html", {"logs": AuditLog.objects.select_related("actor", "candidate")[:300]})
+@login_required
+def welcome_review(request, cid):
+    candidate = get_candidate(request, cid)
+    analysis = request.session.get(f"analysis_{cid}") or services.basic_cv_analysis(candidate.all_cv_text())
+    suggestions = [s for s in analysis.get("suggested_job_types") or [] if isinstance(s, str)][:12]
+    initial = {"full_name": analysis.get("full_name") or candidate.full_name,
+               "email": analysis.get("email") or candidate.email,
+               "phone": analysis.get("phone") or candidate.phone,
+               "location": analysis.get("location") or candidate.location,
+               "education": analysis.get("education") or candidate.education,
+               "experience_summary": analysis.get("experience") or candidate.experience_summary,
+               "skills": analysis.get("skills") or candidate.skills}
+    if request.method == "POST":
+        form = WelcomeReviewForm(request.POST, instance=candidate, suggestions=suggestions)
+        if form.is_valid():
+            c = form.save(commit=False)
+            chosen = form.cleaned_data["job_choices"] + [
+                j.strip() for j in form.cleaned_data["more_jobs"].split(",") if j.strip()]
+            c.job_types = ", ".join(dict.fromkeys(chosen)) or c.job_types
+            c.onboarding_done = True
+            c.save()
+            request.session.pop(f"analysis_{cid}", None)
+            AuditLog.log("onboarding_done", c.job_types, actor=request.user, candidate=c)
+            messages.success(request, "Your profile is ready. Click 'Search jobs now' to find jobs that fit your CV.")
+            return redirect("candidate_dashboard", cid=cid)
+    else:
+        form = WelcomeReviewForm(instance=candidate, initial=initial, suggestions=suggestions)
+    return render(request, "agent/welcome.html", {"c": candidate, "form": form, "step": 2,
+                                                  "mode": analysis.get("mode", "basic")})
 
 
 # ------------------------------------------------------------------ candidate pages
 @login_required
 def candidate_dashboard(request, cid):
     candidate = get_candidate(request, cid)
+    if not candidate.onboarding_done and candidate.user_id == request.user.id:
+        return redirect("welcome", cid=cid)
     stats = candidate_stats(candidate)
-    if request.method == "POST" and request.POST.get("action") == "insight":
-        text = run_ai(request, "AI summary", services.daily_insight, candidate, stats)
-        if text:
-            candidate.last_insight, candidate.last_insight_at = text, timezone.now()
-            candidate.save(update_fields=["last_insight", "last_insight_at"])
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "insight":
+            text = run_step(request, "AI summary", services.daily_insight, candidate, stats)
+            if text:
+                candidate.last_insight, candidate.last_insight_at = text, timezone.now()
+                candidate.save(update_fields=["last_insight", "last_insight_at"])
+        elif action in ("pause", "resume"):
+            candidate.search_paused = action == "pause"
+            candidate.save(update_fields=["search_paused"])
+            AuditLog.log(f"search_{action}d", "", actor=request.user, candidate=candidate)
+            messages.success(request, "Daily search paused." if candidate.search_paused else "Daily search is on.")
         return redirect("candidate_dashboard", cid=cid)
     ctx = {
         "c": candidate, "stats": stats, "search_form": SearchForm(),
-        "top_jobs": candidate.jobs.filter(status="suggested").order_by("-match_score")[:8],
+        "top_jobs": candidate.jobs.filter(status="suggested").order_by("-match_score")[:6],
         "follow_ups": candidate.applications.filter(follow_up_date__lte=timezone.localdate())
-                                            .exclude(status__in=CLOSED).select_related("job")[:8],
-        "ai_on": services.claude_available(),
+                                            .exclude(status__in=CLOSED).select_related("job")[:6],
+        "ai_on": services.claude_available(candidate), "links": personal_links(request, candidate),
+        "active": "dashboard",
     }
     return render(request, "agent/dashboard.html", ctx)
+
+
+@login_required
+def candidate_settings(request, cid):
+    candidate = get_candidate(request, cid)
+    if candidate.user_id != request.user.id and not request.user.is_superuser:
+        raise PermissionDenied
+    form = UserSettingsForm(request.POST or None, initial={"gmail_address": candidate.gmail_address})
+    action = request.POST.get("action")
+    if request.method == "POST" and action == "save" and form.is_valid():
+        d = form.cleaned_data
+        candidate.gmail_address = d["gmail_address"]
+        if d["remove_gmail"]:
+            candidate.gmail_app_password = ""
+        elif d["gmail_app_password"]:
+            candidate.gmail_app_password = d["gmail_app_password"]
+        if d["remove_ai_key"]:
+            candidate.ai_key = ""
+        elif d["ai_key"]:
+            candidate.ai_key = d["ai_key"]
+        candidate.save()
+        AuditLog.log("settings_saved", "gmail/ai settings updated", actor=request.user, candidate=candidate)
+        messages.success(request, "Settings saved.")
+        return redirect("candidate_settings", cid=cid)
+    if request.method == "POST" and action == "test_ai":
+        key = services.candidate_key(candidate)
+        if not key:
+            messages.error(request, "No Claude key saved (or AI is turned off by the admin).")
+        else:
+            ok, msg = services.test_ai_key(key)
+            (messages.success if ok else messages.error)(request, msg)
+        return redirect("candidate_settings", cid=cid)
+    if request.method == "POST" and action == "test_gmail":
+        if not candidate.gmail_ready:
+            messages.error(request, "Save your Gmail address and App Password first (or Gmail is turned off by the admin).")
+        else:
+            ok, msg = services.test_gmail(candidate.gmail_address, candidate.gmail_app_password)
+            (messages.success if ok else messages.error)(request, msg)
+        return redirect("candidate_settings", cid=cid)
+    return render(request, "agent/settings.html", {
+        "c": candidate, "form": form, "has_ai_key": bool(candidate.ai_key_enc),
+        "has_gmail_pw": bool(candidate.gmail_app_password_enc), "ai_on": services.claude_available(candidate),
+        "links": personal_links(request, candidate), "active": "settings"})
 
 
 @login_required
@@ -191,7 +297,7 @@ def candidate_profile(request, cid):
         messages.success(request, f"CV '{cv.title}' saved. Check the text and edit if needed.")
         return redirect("cv_edit", cid=cid, pk=cv.pk)
     return render(request, "agent/profile.html", {"c": candidate, "pform": pform, "cvform": cvform,
-                                                  "is_owner": is_owner})
+                                                  "is_owner": is_owner, "active": "profile"})
 
 
 @login_required
@@ -203,7 +309,7 @@ def cv_edit(request, cid, pk):
         form.save()
         messages.success(request, "CV updated.")
         return redirect("candidate_profile", cid=cid)
-    return render(request, "agent/cv_edit.html", {"c": candidate, "cv": cv, "form": form})
+    return render(request, "agent/cv_edit.html", {"c": candidate, "cv": cv, "form": form, "active": "profile"})
 
 
 @login_required
@@ -225,10 +331,10 @@ def jobs(request, cid):
         form = SearchForm(request.POST)
         if form.is_valid():
             kws = [k.strip() for k in form.cleaned_data["keywords"].split(",") if k.strip()] or None
-            report = run_ai(request, "Job search", workflow.run_search, candidate, kws, request.user)
+            report = run_step(request, "Job search", workflow.run_search, candidate, kws, request.user)
             if report:
                 messages.success(request, f"Search finished: {report['new_jobs']} new jobs, "
-                                          f"{report['suggested']} AI suggested, {report['prepared']} applications prepared.")
+                                          f"{report['suggested']} suggested for you, {report['prepared']} applications prepared.")
                 for note in report["notes"][:12]:
                     messages.info(request, note)
         return redirect("jobs", cid=cid)
@@ -236,10 +342,9 @@ def jobs(request, cid):
         form = JobURLForm(request.POST)
         if form.is_valid():
             url = form.cleaned_data["url"]
-            job, created = workflow.create_job(candidate, title="Untitled job", url=url, source="url",
-                                               site=url.split("/")[2])
-            if run_ai(request, "Reading the job page", workflow.fill_job_details, job):
-                run_ai(request, "Scoring", workflow.score, job)
+            job, _ = workflow.create_job(candidate, title="Untitled job", url=url, source="url", site=url.split("/")[2])
+            if run_step(request, "Reading the job page", workflow.fill_job_details, job):
+                run_step(request, "Scoring", workflow.score, job)
             return redirect("job_detail", cid=cid, pk=job.pk)
         messages.error(request, "Please enter a valid link.")
         return redirect("jobs", cid=cid)
@@ -249,7 +354,7 @@ def jobs(request, cid):
             d = form.cleaned_data
             job, _ = workflow.create_job(candidate, title=d["title"], company=d["company"], url=d["url"],
                                          description=d["description"], source="paste")
-            run_ai(request, "Scoring", workflow.score, job)
+            run_step(request, "Scoring", workflow.score, job)
             return redirect("job_detail", cid=cid, pk=job.pk)
         messages.error(request, "Please fill in the job title and description.")
         return redirect("jobs", cid=cid)
@@ -259,7 +364,7 @@ def jobs(request, cid):
     if status:
         qs = qs.filter(status=status)
     ctx = {"c": candidate, "jobs": qs.order_by("-found_at")[:300], "status": status, "statuses": Job.STATUSES,
-           "search_form": SearchForm(), "url_form": JobURLForm(), "paste_form": JobPasteForm()}
+           "search_form": SearchForm(), "url_form": JobURLForm(), "paste_form": JobPasteForm(), "active": "jobs"}
     return render(request, "agent/jobs.html", ctx)
 
 
@@ -270,16 +375,16 @@ def job_detail(request, cid, pk):
     app = getattr(job, "application", None)
     action = request.POST.get("action")
     if action == "rescore":
-        run_ai(request, "Reading the job page", workflow.fill_job_details, job)
-        if run_ai(request, "Scoring", workflow.score, job):
+        run_step(request, "Reading the job page", workflow.fill_job_details, job)
+        if run_step(request, "Scoring", workflow.score, job):
             messages.success(request, f"Match score: {job.match_score}")
     elif action == "generate":
-        if run_ai(request, "Creating CV and cover letter", workflow.prepare_application, job, request.user):
-            messages.success(request, "Tailored CV, cover letter and email are ready below. Please review them.")
+        if run_step(request, "Creating CV and cover letter", workflow.prepare_application, job, request.user):
+            messages.success(request, "Your CV, cover letter and email are ready below. Please read and check them.")
     elif action == "interview":
         if app is None:
             app = Application.objects.create(candidate=candidate, job=job)
-        text = run_ai(request, "Interview preparation", services.interview_prep, candidate, job)
+        text = run_step(request, "Interview preparation", services.interview_prep, candidate, job)
         if text:
             app.interview_prep = text
             app.save(update_fields=["interview_prep"])
@@ -289,13 +394,7 @@ def job_detail(request, cid, pk):
             job.status = new
             job.save(update_fields=["status"])
     elif action == "applied" and app:
-        today = timezone.localdate()
-        app.status, app.applied_at = "applied", app.applied_at or today
-        app.follow_up_date = app.follow_up_date or today + timedelta(days=7)
-        app.save()
-        job.status = "applied"
-        job.save(update_fields=["status"])
-        AuditLog.log("marked_applied", str(job), actor=request.user, candidate=candidate)
+        mark_applied(request, candidate, job, app)
         messages.success(request, "Recorded as applied. A follow-up reminder is set for 7 days.")
     elif action == "save_app" and app:
         form = ApplicationForm(request.POST, instance=app)
@@ -304,12 +403,60 @@ def job_detail(request, cid, pk):
             messages.success(request, "Application saved.")
         else:
             messages.error(request, "Please check the form.")
+    elif action == "send_email" and app:
+        send_application_email(request, candidate, job, app)
     if action:
         return redirect("job_detail", cid=cid, pk=pk)
     app = getattr(job, "application", None)
+    share_text = f"{job.title}{' - ' + job.company if job.company else ''}\n{job.url}".strip()
     ctx = {"c": candidate, "job": job, "app": app, "app_form": ApplicationForm(instance=app) if app else None,
-           "statuses": Job.STATUSES, "questions": job.questions.filter(answer="")}
+           "statuses": Job.STATUSES, "questions": job.questions.filter(answer=""), "active": "jobs",
+           "wa_job": services.whatsapp_link(share_text),
+           "wa_app": services.whatsapp_link(services.split_email_draft(app.email_draft, job.title)[1])
+           if app and app.email_draft else ""}
     return render(request, "agent/job_detail.html", ctx)
+
+
+def mark_applied(request, candidate, job, app):
+    today = timezone.localdate()
+    app.status, app.applied_at = "applied", app.applied_at or today
+    app.follow_up_date = app.follow_up_date or today + timedelta(days=7)
+    app.save()
+    job.status = "applied"
+    job.save(update_fields=["status"])
+    AuditLog.log("marked_applied", str(job), actor=request.user, candidate=candidate)
+
+
+def send_application_email(request, candidate, job, app):
+    """Send the reviewed application from the user's own Gmail (only when they click Send)."""
+    if candidate.user_id != request.user.id:
+        messages.error(request, "Only the job seeker can send their own application.")
+        return
+    if not candidate.gmail_ready:
+        messages.error(request, "Set up your Gmail first on the Settings page.")
+        return
+    if not app.employer_email:
+        messages.error(request, "Add the employer's email address below, save, then click Send.")
+        return
+    subject, body = services.split_email_draft(app.email_draft, f"Application - {job.title}")
+    name = slugify(candidate.full_name)
+    files = []
+    docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if app.cv_text:
+        files.append((f"{name}-CV.docx", services.make_docx(app.cv_text), docx_mime))
+    if app.cover_letter:
+        files.append((f"{name}-Cover-Letter.docx", services.make_docx(app.cover_letter), docx_mime))
+    try:
+        services.send_gmail(candidate.gmail_address, candidate.gmail_app_password, app.employer_email,
+                            subject, body or "Please find my CV and cover letter attached.", files)
+    except Exception as exc:
+        messages.error(request, f"Email not sent: {exc.__class__.__name__}. Check your Gmail settings.")
+        return
+    app.email_sent_at = timezone.now()
+    app.save(update_fields=["email_sent_at"])
+    mark_applied(request, candidate, job, app)
+    AuditLog.log("application_emailed", f"{job} -> {app.employer_email}", actor=request.user, candidate=candidate)
+    messages.success(request, f"Application sent to {app.employer_email} and recorded as applied.")
 
 
 @login_required
@@ -326,7 +473,7 @@ def applications(request, cid):
         return redirect("applications", cid=cid)
     apps = candidate.applications.select_related("job")
     return render(request, "agent/applications.html", {"c": candidate, "apps": apps,
-                                                       "statuses": Application.STATUSES})
+                                                       "statuses": Application.STATUSES, "active": "applications"})
 
 
 @login_required
@@ -338,8 +485,9 @@ def download_docx(request, cid, pk, kind):
     if kind not in fields:
         raise PermissionDenied
     field, label = fields[kind]
-    heading = candidate.full_name if kind == "cv" else ""
-    data = services.make_docx(getattr(app, field), heading=heading if not getattr(app, field).startswith(candidate.full_name) else "")
+    content = getattr(app, field)
+    heading = candidate.full_name if kind == "cv" and not content.startswith(candidate.full_name) else ""
+    data = services.make_docx(content, heading=heading)
     name = slugify(f"{candidate.full_name} {label} {app.job.company or app.job.title}")[:80]
     resp = HttpResponse(data, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
     resp["Content-Disposition"] = f'attachment; filename="{name}.docx"'
@@ -356,6 +504,7 @@ def questions(request, cid):
         else:
             q.answer = request.POST.get("answer", "").strip()
             q.save(update_fields=["answer"])
-            messages.success(request, "Thanks - the AI will use this answer in future CVs.")
+            messages.success(request, "Thanks - this answer will be used in your future CVs.")
         return redirect("questions", cid=cid)
-    return render(request, "agent/questions.html", {"c": candidate, "questions": candidate.questions.all()})
+    return render(request, "agent/questions.html", {"c": candidate, "questions": candidate.questions.all(),
+                                                    "active": "questions"})

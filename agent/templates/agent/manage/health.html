@@ -1,0 +1,15 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>System health</h1><p>Is everything working?</p></div>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="sites"><button class="light">Check job websites now</button></form></div>
+<div class="card"><table>
+{% for ch in checks %}<tr><td style="width:40px">{% if ch.ok %}✅{% else %}⚠️{% endif %}</td><td><b>{{ ch.name }}</b></td><td class="muted">{{ ch.detail }}</td></tr>{% endfor %}
+{% for ch in sites %}<tr><td>{% if ch.ok %}✅{% else %}⚠️{% endif %}</td><td><b>Job website: {{ ch.name }}</b></td><td class="muted">{{ ch.detail }}</td></tr>{% endfor %}
+</table></div>
+<div class="grid">
+  <div class="card"><h2>Last daily search result</h2><pre>{{ s.last_daily_result|default:"Not run yet." }}</pre></div>
+  <div class="card"><h2>System</h2><table>{% for k, v in info.items %}<tr><td class="muted">{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}</table></div>
+</div>
+<div class="card"><h2>Recent problems</h2><table>{% for e in errors %}<tr><td class="muted small">{{ e.created_at|date:"d M H:i" }}</td><td>{{ e.candidate|default:"" }}</td><td>{{ e.action }}</td><td class="muted small">{{ e.detail|truncatechars:120 }}</td></tr>{% empty %}<tr><td class="muted">No problems recorded. 👍</td></tr>{% endfor %}</table></div>
+<div class="card"><h3>If something is not working</h3><ol class="small"><li>Double-click <code>stop.bat</code>, then <code>start.bat</code>.</li><li>Run <code>logs.bat</code> to see messages.</li><li>Run <code>backup.bat</code> before big changes.</li></ol></div>
+{% endblock %}

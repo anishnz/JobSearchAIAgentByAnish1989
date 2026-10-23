@@ -1,82 +1,59 @@
 {% extends "agent/base.html" %}
-{% block title %}Help - Job Search AI Agent{% endblock %}
+{% block title %}Help - {{ site_title }}{% endblock %}
 {% block content %}
-<h1>How to use the Job Search AI Agent</h1>
-{% if own %}<p><a class="btn" href="{% url 'candidate_dashboard' own.pk %}">Go to my dashboard</a></p>{% endif %}
-{% if not ai_on %}<div class="msg warning">Claude AI is not connected yet. Add your ANTHROPIC_API_KEY to the .env file and run start.bat again. Basic keyword matching works without it.</div>{% endif %}
+<div class="top"><div><h1>Help</h1><p>Everything you need, in simple steps.</p></div>{% if own_candidate %}<a class="btn" href="{% url 'candidate_dashboard' own_candidate.pk %}">Go to my dashboard</a>{% endif %}</div>
 
 <div class="card">
-  <h2>Quick start (5 steps)</h2>
+  <h2>Getting started (first time)</h2>
   <ol>
-    <li><b>Profile &amp; CVs:</b> open <i>Profile &amp; CVs</i>. Check your name, phone, availability and job types. Add one or more CVs (upload PDF/Word or paste the text).</li>
-    <li><b>Find jobs:</b> open <i>Jobs</i>. Click <i>Search jobs</i> (type a job type or leave it empty), add a job from a website link, or paste a job description.</li>
-    <li><b>Check the score:</b> each job gets a match score (green 70+, orange 45&ndash;69, red below 45) with reasons and a tip.</li>
-    <li><b>Create documents:</b> open a job and click <i>Create CV + cover letter</i>. The AI uses your most relevant CV. Read everything, replace any <code>[ADD: ...]</code> notes with true facts, then download the Word files.</li>
-    <li><b>Apply and record:</b> apply on the employer's website, then click <i>I have applied</i>. A follow-up reminder is set for 7 days later.</li>
+    <li>Open your <b>personal link</b> (the admin gives it to you) and log in.</li>
+    <li><b>Upload your CV.</b> The agent reads it and fills in your details, education and experience.</li>
+    <li><b>Check your details</b> and tick the job types you want. These come from <i>your</i> CV, so everyone gets different jobs.</li>
+    <li>Click <b>Search jobs now</b>. After that, the search runs by itself every day at 8:00 AM.</li>
   </ol>
 </div>
 
 <div class="grid">
-  <div class="card">
-    <h2>Dashboard</h2>
-    <ul>
-      <li>Jobs found today, AI suggestions, applications to review, applied today/total, interviews and follow-ups due.</li>
-      <li><i>Ask AI for today's summary</i> gives a short plan for the day.</li>
-      <li>The automatic search runs every day at <b>8:00 AM (Auckland time)</b> for every active user.</li>
-    </ul>
-  </div>
-  <div class="card">
-    <h2>AI questions</h2>
-    <p>The AI never guesses facts about you. When it needs true information (for example, a licence or a certificate), it asks: <i>"Question for &lt;your name&gt;: ..."</i>. Answer it on the <i>AI questions</i> page. Your answer is used in your future CVs only.</p>
-  </div>
-  <div class="card">
-    <h2>Interview preparation</h2>
-    <p>On a job page, click <i>Interview preparation</i> for likely questions, sample answers based on your real background, questions to ask the employer, and YouTube practice searches. You can download it as a Word file.</p>
-  </div>
-  <div class="card">
-    <h2>Auto mode (optional)</h2>
-    <p>Off by default. Only you can turn it on in <i>Profile &amp; CVs</i> (tick the consent box). It prepares a CV and cover letter automatically for strong matches. You still review and submit every application yourself.</p>
-  </div>
+  <div class="card"><h2>🏠 Dashboard</h2><ul>
+    <li><b>Search jobs now</b> - find new jobs straight away (about 1 minute).</li>
+    <li><b>Pause / Resume daily search</b> - stop or restart the 8:00 AM search.</li>
+    <li><b>Best jobs for you</b> - green score (70+) = good match, orange = maybe, red = weak.</li>
+    <li><b>Make today's plan</b> - a short to-do list for today.</li></ul></div>
+  <div class="card"><h2>🔎 Applying for a job</h2><ol>
+    <li>Open a job and click <b>Create my CV + cover letter</b>.</li>
+    <li>Read and correct them. Replace any <code>[ADD: ...]</code> with true facts.</li>
+    <li>Download the Word files, or click <b>Send application now</b> (needs Gmail in Settings).</li>
+    <li>Click <b>I have applied</b>. You get a follow-up reminder after 7 days.</li></ol></div>
+  <div class="card"><h2>💬 AI questions</h2><p>When the AI needs true information (for example a driver licence or a certificate), it asks you. Answer on the <b>AI questions</b> page.</p></div>
+  <div class="card"><h2>🎤 Interview practice</h2><p>On a job page, click <b>Interview practice</b> for likely questions, sample answers from your real background and YouTube practice links.</p></div>
+  <div class="card"><h2>⚙️ Settings</h2><ul>
+    <li><b>Claude key</b> (optional): turns on smart AI. Without it, free basic mode is used.</li>
+    <li><b>Gmail</b> (optional): send applications from your own Gmail with an App Password.</li>
+    <li><b>WhatsApp</b>: green buttons on job pages - no setup.</li></ul>
+    <p class="small">Step-by-step links are on the Settings page.</p></div>
+  <div class="card"><h2>🔒 Password</h2><p>Forgot it? Click <b>Forgot password</b> on the log-in page to get an email link, or ask the admin to set a new one.</p></div>
 </div>
 
-<div class="card">
-  <h2>Job websites</h2>
-  <p>The agent reads public pages on SEEK, Student Job Search and Trade Me Jobs and respects each site's rules. If a site blocks automated reading (for example LinkedIn or Indeed), open the job yourself and use <i>Add a job from a link</i> or <i>Paste a job description</i>.</p>
-</div>
+<div class="card"><h2>📱 Opening it on a phone or another laptop at home</h2>
+  <p>Use the "from other devices at home" link shown on your dashboard (it looks like <span class="link">http://192.168.x.x:8010/u/yourname/</span>). The laptop running the app must be on, and both devices must use the same Wi-Fi.</p>
+  <p class="small muted">If it does not open: on the laptop, allow Docker Desktop in Windows Firewall (Private networks).</p></div>
 
 {% if user.is_staff %}
-<div class="card">
-  <h2>Admin tasks</h2>
-  <ul>
-    <li><b>Give access:</b> <i>Give access</i> &rarr; enter name, login name, password and job types. Each person's data is private and never mixed.</li>
-    <li><b>Turn a login off/on:</b> on <i>Admin overview</i>, click <i>Disable login</i> / <i>Enable login</i>.</li>
-    <li><b>Audit log:</b> see who did what and when. Opening another person's records is logged.</li>
-    <li><b>Import many CVs at once</b> (Command Prompt in the project folder):<br>
-      <code>docker compose exec web python manage.py setup_candidate --username NAME --full-name "Full Name" --cv-folder /app/data/import/FOLDER</code><br>
-      <span class="muted">Copy the CV folder into <code>data\import\</code> first.</span></li>
-  </ul>
-</div>
+<div class="card"><h2>👑 Super admin</h2><ul>
+  <li><b>Add a user:</b> Users &amp; access → <i>Add a user</i>. Give them their personal link and password.</li>
+  <li><b>Control access:</b> <i>Manage</i> → turn login on/off, set a new password, allow/deny AI, Gmail and auto mode.</li>
+  <li><b>System health:</b> checks the database, the 8:00 AM scheduler, disk space, email and job websites.</li>
+  <li><b>System settings:</b> add your Gmail App Password so "Forgot password" emails work.</li>
+  <li><b>Activity log:</b> who did what, and when.</li></ul></div>
 {% endif %}
 
-<div class="card">
-  <h2>Windows files (double-click in the project folder)</h2>
-  <table>
-    <tr><td><code>start.bat</code></td><td>Start the app and open the dashboard</td></tr>
-    <tr><td><code>stop.bat</code></td><td>Stop the app (data is kept)</td></tr>
-    <tr><td><code>search_now.bat</code></td><td>Run the job search now for everyone</td></tr>
-    <tr><td><code>set_password.bat</code></td><td>Set or change a login password</td></tr>
-    <tr><td><code>create_admin.bat</code></td><td>Create another admin login</td></tr>
-    <tr><td><code>backup.bat</code></td><td>Back up the data folder</td></tr>
-    <tr><td><code>logs.bat</code></td><td>Show live logs if something goes wrong</td></tr>
-  </table>
-</div>
+<div class="card"><h2>🖥️ Windows files (in the project folder)</h2><table>
+  <tr><td><code>start.bat</code></td><td>Start the app (shows your links)</td></tr>
+  <tr><td><code>stop.bat</code></td><td>Stop the app (data is kept)</td></tr>
+  <tr><td><code>search_now.bat</code></td><td>Search jobs now for everyone</td></tr>
+  <tr><td><code>set_password.bat</code></td><td>Set a password from the computer</td></tr>
+  <tr><td><code>backup.bat</code></td><td>Back up all data</td></tr>
+  <tr><td><code>logs.bat</code></td><td>Show messages if something goes wrong</td></tr></table></div>
 
-<div class="card">
-  <h2>Good practice</h2>
-  <ul>
-    <li>Never invent experience. Keep every CV honest.</li>
-    <li>Do not put passport, visa or IRD numbers or your date of birth on a CV.</li>
-    <li>Run <code>backup.bat</code> once a week.</li>
-  </ul>
-</div>
+<div class="card"><h2>Good practice</h2><ul><li>Keep every CV honest - never invent experience.</li><li>Do not put passport, visa or IRD numbers or your date of birth on a CV.</li><li>Run <code>backup.bat</code> once a week.</li></ul></div>
 {% endblock %}

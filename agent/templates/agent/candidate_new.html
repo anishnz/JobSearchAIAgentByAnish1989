@@ -1,8 +1,0 @@
-{% extends "agent/base.html" %}
-{% block content %}
-<h1>Give access to a new user</h1>
-<div class="card" style="max-width:640px">
-  <p class="muted">Each user has a private space. Their CVs, jobs and applications are never mixed with another user's.</p>
-  <form method="post">{% csrf_token %}{{ form.as_p }}<button>Create access</button></form>
-</div>
-{% endblock %}

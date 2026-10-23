@@ -1,0 +1,34 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>Settings</h1><p>Your own Gmail and AI key. Saved passwords and keys are stored encrypted.</p></div></div>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">
+<div class="grid">
+  <div class="card">
+    <h2>🤖 AI (Claude)</h2>
+    <p>Status: {% if ai_on %}<span class="badge ok">AI on</span>{% elif not c.ai_allowed %}<span class="badge bad">Turned off by the admin</span>{% else %}<span class="badge warn">Free basic mode</span>{% endif %}
+       {% if has_ai_key %}<span class="badge blue">key saved</span>{% endif %}</p>
+    {{ form.ai_key.label_tag }}{{ form.ai_key }}<span class="helptext">{{ form.ai_key.help_text }}</span>
+    <label style="font-weight:500">{{ form.remove_ai_key }} {{ form.remove_ai_key.label }}</label>
+    <p class="small muted">How to get a key: 1) open <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com → API Keys</a>, 2) click <i>Create key</i>, 3) add a little credit in <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener">Billing</a> (pay as you go, separate from a Claude.ai subscription), 4) paste the key here.</p>
+  </div>
+  <div class="card">
+    <h2>✉️ Gmail (send applications)</h2>
+    <p>Status: {% if c.gmail_ready %}<span class="badge ok">Ready</span>{% elif not c.email_allowed %}<span class="badge bad">Turned off by the admin</span>{% else %}<span class="badge warn">Not set up</span>{% endif %}</p>
+    {{ form.gmail_address.label_tag }}{{ form.gmail_address }}
+    {{ form.gmail_app_password.label_tag }}{{ form.gmail_app_password }}<span class="helptext">{{ form.gmail_app_password.help_text }}{% if has_gmail_pw %} (an App Password is saved){% endif %}</span>
+    <label style="font-weight:500">{{ form.remove_gmail }} {{ form.remove_gmail.label }}</label>
+    <p class="small muted">How to get an App Password: 1) turn on <a href="https://myaccount.google.com/signinoptions/twosv" target="_blank" rel="noopener">2-Step Verification</a>, 2) open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">App passwords</a>, 3) create one named "Job Agent", 4) paste the 16 letters here. Emails are only sent when you click <b>Send</b> on a job.</p>
+  </div>
+  <div class="card">
+    <h2>🟢 WhatsApp</h2>
+    <p class="muted">No setup needed. On each job page, use the green <b>Share on WhatsApp</b> buttons to send the job link or your message from your own WhatsApp.</p>
+  </div>
+</div>
+<p><button class="big">Save settings</button></p>
+</form>
+<div class="card"><h2>Test</h2><div class="row">
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test_ai"><button class="light">Test my Claude key</button></form>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test_gmail"><button class="light">Send me a test email</button></form>
+</div></div>
+<div class="card"><h3>Your personal link</h3><p class="small">On this laptop: <span class="link">{{ links.laptop }}</span>{% if links.home %}<br>From other devices at home: <span class="link">{{ links.home }}</span>{% endif %}</p></div>
+{% endblock %}

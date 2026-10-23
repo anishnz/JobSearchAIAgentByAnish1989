@@ -2,56 +2,99 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Job Search AI Agent{% endblock %}</title>
+<title>{% block title %}{{ site_title }}{% endblock %}</title>
 <style>
-:root{--bg:#f5f7fa;--card:#fff;--ink:#1d2433;--muted:#5d6878;--line:#e2e7ee;--brand:#1f6feb;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
-*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
-header{background:#0f2747;color:#fff;padding:10px 20px;display:flex;flex-wrap:wrap;gap:16px;align-items:center}
-header a{color:#dbe7ff;text-decoration:none;font-weight:500}header a:hover{color:#fff}header .brand{font-weight:700;color:#fff;margin-right:12px}
-header .right{margin-left:auto;display:flex;gap:12px;align-items:center}
-main{max-width:1200px;margin:0 auto;padding:20px}
-h1{font-size:24px;margin:4px 0 16px}h2{font-size:18px;margin:0 0 12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
-.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.stats{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}.stat b{display:block;font-size:26px}.stat span{color:var(--muted);font-size:13px}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:13px;color:var(--muted)}
-.btn,button{display:inline-block;background:var(--brand);color:#fff;border:0;border-radius:7px;padding:8px 14px;font-size:14px;cursor:pointer;text-decoration:none}
-.btn.secondary,button.secondary{background:#eef2f7;color:var(--ink);border:1px solid var(--line)}.btn.danger,button.danger{background:var(--bad)}
-input,select,textarea{width:100%;padding:8px;border:1px solid #c9d1dc;border-radius:7px;font:inherit;background:#fff}
-label{font-weight:600;display:block;margin:10px 0 4px}.helptext{color:var(--muted);font-size:12px;display:block}
-.errorlist{color:var(--bad);margin:4px 0;padding-left:18px}
-.msg{padding:10px 14px;border-radius:8px;margin-bottom:8px;background:#eaf2ff}.msg.success{background:#dafbe1}.msg.error{background:#ffebe9}.msg.warning{background:#fff8c5}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;background:#eef2f7}
-.score{font-weight:700}.score.hi{color:var(--ok)}.score.mid{color:var(--warn)}.score.lo{color:var(--bad)}
-.muted{color:var(--muted)}pre{white-space:pre-wrap;font-family:inherit;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:12px;margin:0}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.subnav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-@media(max-width:600px){main{padding:12px}td,th{padding:6px;font-size:13px}}
+:root{--bg:#f4f6fb;--card:#fff;--ink:#16213a;--muted:#5f6b80;--line:#e3e8f0;--navy:#0f2747;--brand:#2563eb;--brand-soft:#e8f0ff;
+--ok:#15803d;--ok-soft:#dcfce7;--warn:#b45309;--warn-soft:#fef3c7;--bad:#b91c1c;--bad-soft:#fee2e2;--radius:14px;--shadow:0 1px 2px rgba(16,24,40,.06),0 4px 14px rgba(16,24,40,.05)}
+*{box-sizing:border-box}html,body{margin:0}body{font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
+a{color:var(--brand)}h1{font-size:26px;margin:0 0 4px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0 0 8px}
+.layout{display:flex;min-height:100vh}
+.side{width:248px;background:var(--navy);color:#cdd8ee;padding:18px 14px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.side .logo{display:block;color:#fff;font-weight:700;font-size:17px;text-decoration:none;padding:4px 10px 16px}
+.side .logo small{display:block;font-weight:400;color:#8fa3c8;font-size:12px}
+.side .sect{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#7f93b8;margin:16px 10px 6px}
+.side a.nav{display:flex;gap:10px;align-items:center;color:#dbe5f7;text-decoration:none;padding:9px 10px;border-radius:9px;margin:2px 0;font-weight:500}
+.side a.nav:hover{background:rgba(255,255,255,.08);color:#fff}.side a.nav.on{background:var(--brand);color:#fff}
+.side .who{margin-top:18px;padding:12px 10px;border-top:1px solid rgba(255,255,255,.12);font-size:13px}
+main{flex:1;min-width:0;padding:26px 32px 48px;max-width:1240px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.top p{margin:0;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:18px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.grid3{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.stats{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.stat b{display:block;font-size:28px;line-height:1.1}.stat span{color:var(--muted);font-size:13px}
+.stat.blue{border-top:4px solid var(--brand)}.stat.green{border-top:4px solid var(--ok)}.stat.orange{border-top:4px solid #f59e0b}.stat.purple{border-top:4px solid #7c3aed}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.btn,button{display:inline-flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;font-family:inherit}
+.btn:hover,button:hover{filter:brightness(.95)}.btn.big,button.big{padding:14px 22px;font-size:16px}
+.btn.light,button.light{background:#eef2f8;color:var(--ink);border:1px solid var(--line)}
+.btn.green,button.green{background:var(--ok)}.btn.orange,button.orange{background:#d97706}.btn.red,button.red{background:var(--bad)}
+.btn.wa{background:#16a34a}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid #cfd7e3;border-radius:10px;font:inherit;background:#fff}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+input[type=checkbox]{width:auto;margin-right:6px}
+label{font-weight:600;display:block;margin:12px 0 5px}.helptext{color:var(--muted);font-size:12px;display:block;margin-top:3px}
+ul.errorlist{color:var(--bad);margin:4px 0;padding-left:18px}
+form p{margin:0 0 6px}
+.msg{padding:12px 16px;border-radius:10px;margin-bottom:10px;background:var(--brand-soft)}
+.msg.success{background:var(--ok-soft)}.msg.error{background:var(--bad-soft)}.msg.warning{background:var(--warn-soft)}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:#eef2f8;color:var(--ink)}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}.badge.bad{background:var(--bad-soft);color:var(--bad)}.badge.warn{background:var(--warn-soft);color:var(--warn)}.badge.blue{background:var(--brand-soft);color:var(--brand)}
+.score{display:inline-block;min-width:44px;text-align:center;font-weight:700;border-radius:8px;padding:4px 8px}
+.score.hi{background:var(--ok-soft);color:var(--ok)}.score.mid{background:var(--warn-soft);color:var(--warn)}.score.lo{background:var(--bad-soft);color:var(--bad)}
+.muted{color:var(--muted)}.small{font-size:13px}
+pre{white-space:pre-wrap;font-family:inherit;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:14px;margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.jobcard{display:flex;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.jobcard:last-child{border:0}
+.jobcard .t{flex:1;min-width:0}.jobcard .t a{font-weight:600;text-decoration:none}
+.steps{display:flex;gap:10px;margin-bottom:18px}.steps span{flex:1;padding:10px;border-radius:10px;background:#eef2f8;text-align:center;font-weight:600;color:var(--muted)}
+.steps span.on{background:var(--brand);color:#fff}
+.link{font-family:Consolas,monospace;background:#f1f5fb;border:1px solid var(--line);padding:3px 8px;border-radius:7px;font-size:13px;word-break:break-all}
+.menu-btn{display:none}
+@media(max-width:860px){.layout{display:block}.side{position:static;width:auto;height:auto;padding:12px}.side nav{display:none}.side.open nav{display:block}
+.menu-btn{display:inline-flex;float:right}main{padding:16px}.side .who{display:none}}
 </style>
+{% block head %}{% endblock %}
 </head>
 <body>
-<header>
-  <a class="brand" href="{% url 'home' %}">JobSearchAIAgentByAnish1989</a>
-  {% if user.is_authenticated %}
-    {% if user.is_staff %}<a href="{% url 'home' %}">Admin overview</a><a href="{% url 'candidate_new' %}">Give access</a><a href="{% url 'audit' %}">Audit log</a><a href="/admin/">Django admin</a>{% endif %}
-    <a href="{% url 'help' %}">Help</a>
-    <div class="right"><span>{{ user.username }}</span>
-      <form method="post" action="{% url 'logout' %}" style="margin:0">{% csrf_token %}<button class="secondary">Log out</button></form></div>
-  {% endif %}
-</header>
-<main>
-  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
-  {% if c %}
-  <h1>{{ c.full_name }}</h1>
-  <nav class="subnav">
-    <a class="btn secondary" href="{% url 'candidate_dashboard' c.pk %}">Dashboard</a>
-    <a class="btn secondary" href="{% url 'jobs' c.pk %}">Jobs</a>
-    <a class="btn secondary" href="{% url 'applications' c.pk %}">Applications</a>
-    <a class="btn secondary" href="{% url 'questions' c.pk %}">AI questions</a>
-    <a class="btn secondary" href="{% url 'candidate_profile' c.pk %}">Profile &amp; CVs</a>
-  </nav>
-  {% endif %}
-  {% block content %}{% endblock %}
-</main>
+{% with nav_c=c|default:own_candidate %}
+<div class="layout">
+{% if user.is_authenticated %}
+  <aside class="side" id="side">
+    <button class="light menu-btn" onclick="document.getElementById('side').classList.toggle('open')">Menu</button>
+    <a class="logo" href="{% url 'home' %}">{{ site_title }}<small>Find jobs that fit your CV</small></a>
+    <nav>
+    {% if nav_c %}
+      {% if nav_c.user != user %}<div class="sect">Viewing: {{ nav_c.full_name }}</div>{% else %}<div class="sect">My job search</div>{% endif %}
+      <a class="nav {% if active == 'dashboard' %}on{% endif %}" href="{% url 'candidate_dashboard' nav_c.pk %}">🏠 Dashboard</a>
+      <a class="nav {% if active == 'jobs' %}on{% endif %}" href="{% url 'jobs' nav_c.pk %}">🔎 Find jobs</a>
+      <a class="nav {% if active == 'applications' %}on{% endif %}" href="{% url 'applications' nav_c.pk %}">📋 My applications</a>
+      <a class="nav {% if active == 'questions' %}on{% endif %}" href="{% url 'questions' nav_c.pk %}">💬 AI questions</a>
+      <a class="nav {% if active == 'profile' %}on{% endif %}" href="{% url 'candidate_profile' nav_c.pk %}">👤 My profile &amp; CVs</a>
+      {% if nav_c.user == user or user.is_superuser %}<a class="nav {% if active == 'settings' %}on{% endif %}" href="{% url 'candidate_settings' nav_c.pk %}">⚙️ Settings</a>{% endif %}
+    {% endif %}
+    {% if user.is_staff %}
+      <div class="sect">Super admin</div>
+      <a class="nav {% if active == 'manage' %}on{% endif %}" href="{% url 'manage_home' %}">👥 Users &amp; access</a>
+      <a class="nav {% if active == 'manage_health' %}on{% endif %}" href="{% url 'manage_health' %}">🩺 System health</a>
+      <a class="nav {% if active == 'manage_settings' %}on{% endif %}" href="{% url 'manage_settings' %}">🛠️ System settings</a>
+      <a class="nav {% if active == 'manage_audit' %}on{% endif %}" href="{% url 'manage_audit' %}">🧾 Activity log</a>
+    {% endif %}
+      <div class="sect">Support</div>
+      <a class="nav" href="{% url 'help' %}">❓ Help</a>
+    </nav>
+    <div class="who">Signed in as <b>{{ user.get_full_name|default:user.username }}</b>
+      <form method="post" action="{% url 'logout' %}" style="margin-top:8px">{% csrf_token %}<button class="light" style="width:100%">Log out</button></form></div>
+  </aside>
+{% endif %}
+  <main {% if not user.is_authenticated %}style="margin:0 auto"{% endif %}>
+    {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endwith %}
 </body>
 </html>
