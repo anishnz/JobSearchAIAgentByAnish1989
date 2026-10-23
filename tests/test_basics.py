@@ -128,3 +128,25 @@ class AdminDesignTests(TestCase):
         r = self.client.get("/admin/")
         self.assertContains(r, "Manage users, CVs, jobs and applications")
         self.assertEqual(self.client.get("/admin/agent/candidate/").status_code, 200)
+
+
+class FallbackTests(TestCase):
+    def test_basic_mode_used_when_claude_fails(self):
+        from unittest import mock
+
+        from agent import services
+
+        c = Candidate.objects.create(user=User.objects.create_user("f", password="x"), full_name="F",
+                                     job_types="kitchen hand")
+        CVDocument.objects.create(candidate=c, title="Kitchen CV", text="kitchen hand dishwashing " * 10)
+        job = Job.objects.create(candidate=c, title="Kitchen Hand", description="dishwashing kitchen",
+                                 fingerprint=fingerprint("Kitchen Hand"))
+        boom = Exception("Your credit balance is too low to access the Anthropic API.")
+        with self.settings(ANTHROPIC_API_KEY="sk-test"), mock.patch.object(services, "ask_claude", side_effect=boom):
+            score, reason, questions = services.score_job(c, job)
+            self.assertGreater(score, 30)
+            self.assertIn("no credit", reason)
+            docs = services.generate_documents(c, job)
+            self.assertIn("kitchen hand", docs["cv"])
+            self.assertIn("no credit", services.interview_prep(c, job))
+            self.assertIn("no credit", services.daily_insight(c, {"suggested_today": 0}))

@@ -179,6 +179,27 @@ def ask_claude(prompt, max_tokens=2500):
     return "".join(getattr(b, "text", "") for b in msg.content).strip()
 
 
+def _ai_error_text(exc):
+    """Short, friendly reason why Claude could not be used."""
+    msg = str(exc)
+    if "credit balance" in msg.lower():
+        return "Claude API has no credit"
+    if "authentication" in msg.lower() or "x-api-key" in msg.lower():
+        return "Claude API key is not valid"
+    return f"Claude not reachable ({exc.__class__.__name__})"
+
+
+def with_fallback(ai_fn, basic_fn):
+    """Use Claude when a key is set; if it fails for any reason, use the free basic version."""
+    if not claude_available():
+        return basic_fn(None)
+    try:
+        return ai_fn()
+    except Exception as exc:  # no credit, bad key, network problem, etc.
+        log.warning("Claude failed, using basic mode: %s", exc)
+        return basic_fn(_ai_error_text(exc))
+
+
 def _parse_json(text):
     match = re.search(r"\{.*\}", text or "", re.S)
     if not match:
@@ -249,9 +270,16 @@ def keyword_score(candidate, job):
 
 def score_job(candidate, job):
     """Return (score 0-100, reason, list of questions for the candidate)."""
-    if not claude_available():
+    def basic(err):
         score, reason = keyword_score(candidate, job)
+        if err:
+            reason = f"{err} - basic matching used.\n{reason}"
         return score, reason, []
+
+    return with_fallback(lambda: _score_job_ai(candidate, job), basic)
+
+
+def _score_job_ai(candidate, job):
     prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
               "Rate how suitable this job is for this candidate (0-100), considering essential requirements, "
               "availability, location and the chance of getting an interview. Reply with JSON only:\n"
@@ -266,18 +294,25 @@ def score_job(candidate, job):
 
 def generate_documents(candidate, job):
     """Return dict with cv, cover_letter, email."""
-    if not claude_available():
-        chosen = relevant_cvs(candidate, job, n=1)
-        base_cv = chosen[0] if chosen else None
-        return {
-            "cv": base_cv.text if base_cv else "",
-            "cover_letter": (f"Dear Hiring Manager,\n\nI am applying for the {job.title} role"
-                             f"{' at ' + job.company if job.company else ''}. [Add 2-3 sentences about your "
-                             f"relevant experience.]\n\nMy availability: {candidate.availability}\n\n"
-                             f"Kind regards,\n{candidate.full_name}\n{candidate.phone}\n{candidate.email}"),
-            "email": (f"Subject: Application - {job.title}\n\nKia ora,\n\nPlease find my CV and cover letter "
-                      f"attached for the {job.title} role.\n\nNgā mihi,\n{candidate.full_name}"),
-        }
+    return with_fallback(lambda: _generate_documents_ai(candidate, job),
+                         lambda err: _generate_documents_basic(candidate, job, err))
+
+
+def _generate_documents_basic(candidate, job, err=None):
+    chosen = relevant_cvs(candidate, job, n=1)
+    base_cv = chosen[0] if chosen else None
+    return {
+        "cv": base_cv.text if base_cv else "",
+        "cover_letter": (f"Dear Hiring Manager,\n\nI am applying for the {job.title} role"
+                         f"{' at ' + job.company if job.company else ''}. [Add 2-3 sentences about your "
+                         f"relevant experience.]\n\nMy availability: {candidate.availability}\n\n"
+                         f"Kind regards,\n{candidate.full_name}\n{candidate.phone}\n{candidate.email}"),
+        "email": (f"Subject: Application - {job.title}\n\nKia ora,\n\nPlease find my CV and cover letter "
+                  f"attached for the {job.title} role.\n\nNgā mihi,\n{candidate.full_name}"),
+    }
+
+
+def _generate_documents_ai(candidate, job):
     prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
               "Write, for THIS job only:\n"
               "1) A one-page NZ-style ATS-friendly CV in plain text that includes only relevant true experience.\n"
@@ -304,23 +339,28 @@ def youtube_search_links(job_title):
 
 def interview_prep(candidate, job):
     links = "\n".join(f"- {t}: {u}" for t, u in youtube_search_links(job.title))
-    if not claude_available():
-        body = ("Common questions:\n- Tell me about yourself.\n- Why do you want this job?\n"
+    def basic(err):
+        note = f"({err} - basic version shown.)\n\n" if err else ""
+        return note + ("Common questions:\n- Tell me about yourself.\n- Why do you want this job?\n"
                 "- What is your availability?\n- Tell me about a time you worked in a team.\n"
                 "- How do you handle a busy shift?\n\n(Add an ANTHROPIC_API_KEY for job-specific questions "
                 "and sample answers based on your CV.)")
-    else:
-        body = ask_claude(
+
+    def ai():
+        return ask_claude(
             f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\nPrepare interview practice for this job: "
             "10 likely questions, a short sample answer for each using ONLY the candidate's true background, "
             "3 good questions to ask the employer, and 3 tips. Plain text with headings.", max_tokens=3000)
+
+    body = with_fallback(ai, basic)
     return f"{body}\n\nVIDEO PRACTICE (YouTube searches)\n{links}"
 
 
 def daily_insight(candidate, stats):
     summary = ", ".join(f"{k}: {v}" for k, v in stats.items())
-    if not claude_available():
-        tips = []
+
+    def basic(err):
+        tips = [f"({err} - basic summary shown.)"] if err else []
         if not candidate.cvs.exists():
             tips.append("Upload at least one CV so jobs can be matched.")
         if stats.get("suggested_today", 0) == 0:
@@ -328,6 +368,11 @@ def daily_insight(candidate, stats):
         if stats.get("follow_ups_due", 0):
             tips.append(f"You have {stats['follow_ups_due']} follow-up(s) due - send a short polite email.")
         return " ".join(tips) or "Good progress. Keep applying to the top suggested jobs."
+
+    return with_fallback(lambda: _daily_insight_ai(candidate, summary), basic)
+
+
+def _daily_insight_ai(candidate, summary):
     recent = "\n".join(f"- {j.title} ({j.site or j.company}) score {j.match_score}"
                        for j in candidate.jobs.exclude(match_score=None)[:15])
     return ask_claude(f"Candidate: {candidate.full_name}\nWanted: {candidate.job_types}\nStats: {summary}\n"
