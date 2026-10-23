@@ -1,0 +1,24 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="grid">
+  <div class="card"><h2>1. Search job websites</h2>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="search">{{ search_form.keywords }}<p></p><button>Search jobs</button></form>
+    <p class="muted">Searches public pages on SEEK, Student Job Search and Trade Me Jobs. Sites that block automated reading are skipped - add those jobs with a link or by pasting.</p></div>
+  <div class="card"><h2>2. Add a job from a link</h2>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="add_url">{{ url_form.url }}<p></p><button>Add and score</button></form></div>
+</div>
+<div class="card"><h2>3. Paste a job description</h2>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="paste">{{ paste_form.as_p }}<button>Add and score</button></form></div>
+<div class="card">
+  <div class="row" style="justify-content:space-between"><h2>Jobs</h2>
+    <form method="get" class="row"><select name="status" onchange="this.form.submit()"><option value="">All</option>{% for k,v in statuses %}<option value="{{ k }}" {% if k == status %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></form></div>
+  <table><tr><th>Score</th><th>Job</th><th>Source</th><th>Status</th><th>Application</th><th>Found</th></tr>
+  {% for j in jobs %}<tr>
+    <td>{% include "agent/_score.html" with s=j.match_score %}</td>
+    <td><a href="{% url 'job_detail' c.pk j.pk %}">{{ j.title }}</a><br><span class="muted">{{ j.company }}</span></td>
+    <td>{{ j.site|default:j.get_source_display }}</td><td><span class="badge">{{ j.get_status_display }}</span></td>
+    <td>{% if j.application %}{{ j.application.get_status_display }}{% else %}<span class="muted">-</span>{% endif %}</td>
+    <td class="muted">{{ j.found_at|date:"d M" }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="muted">No jobs yet.</td></tr>{% endfor %}</table>
+</div>
+{% endblock %}

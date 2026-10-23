@@ -1,0 +1,30 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="card">
+  <h2>{{ job.title }}</h2>
+  <p>{{ job.company }} {% if job.location %}· {{ job.location }}{% endif %} {% if job.url %}· <a href="{{ job.url }}" target="_blank" rel="noopener">Open job advert</a>{% endif %}</p>
+  <p>Match score: {% include "agent/_score.html" with s=job.match_score %} · Status: <span class="badge">{{ job.get_status_display }}</span></p>
+  {% if job.match_reason %}<pre>{{ job.match_reason }}</pre>{% endif %}
+  <p></p>
+  <div class="row">
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="rescore"><button class="secondary">Score again</button></form>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="generate"><button>{% if app.cv_text %}Re-create{% else %}Create{% endif %} CV + cover letter</button></form>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="interview"><button class="secondary">Interview preparation</button></form>
+    {% if app and app.status != "applied" %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="applied"><button class="secondary">I have applied</button></form>{% endif %}
+    <form method="post" class="row">{% csrf_token %}<input type="hidden" name="action" value="status"><select name="status">{% for k,v in statuses %}<option value="{{ k }}" {% if k == job.status %}selected{% endif %}>{{ v }}</option>{% endfor %}</select><button class="secondary">Set status</button></form>
+  </div>
+</div>
+{% if questions %}<div class="card"><h2>The AI needs your answer</h2><ul>{% for q in questions %}<li>{{ q.question }}</li>{% endfor %}</ul><a class="btn" href="{% url 'questions' c.pk %}">Answer questions</a></div>{% endif %}
+{% if app %}
+<div class="card">
+  <div class="row" style="justify-content:space-between"><h2>Application</h2>
+  <div class="row">{% if app.cv_text %}<a class="btn secondary" href="{% url 'download_docx' c.pk app.pk 'cv' %}">Download CV (Word)</a>{% endif %}
+  {% if app.cover_letter %}<a class="btn secondary" href="{% url 'download_docx' c.pk app.pk 'cover-letter' %}">Download cover letter</a>{% endif %}
+  {% if app.interview_prep %}<a class="btn secondary" href="{% url 'download_docx' c.pk app.pk 'interview' %}">Download interview prep</a>{% endif %}</div></div>
+  <p class="muted">Please read and correct everything before sending. Replace any [ADD: ...] notes with true information.</p>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="save_app">{{ app_form.as_p }}<button>Save application</button></form>
+</div>
+{% if app.interview_prep %}<div class="card"><h2>Interview preparation</h2><pre>{{ app.interview_prep|urlize }}</pre></div>{% endif %}
+{% endif %}
+<div class="card"><h2>Job description</h2><pre>{{ job.description|default:"No description yet." }}</pre></div>
+{% endblock %}

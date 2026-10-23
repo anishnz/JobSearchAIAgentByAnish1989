@@ -1,0 +1,24 @@
+name: jobsearchaiagentbyanish1989
+
+services:
+  web:
+    build: .
+    container_name: JobSearchAIAgentByAnish1989-web
+    command: web
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    container_name: JobSearchAIAgentByAnish1989-scheduler
+    command: scheduler
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - web
+    restart: unless-stopped

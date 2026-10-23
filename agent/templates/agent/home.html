@@ -1,0 +1,30 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<h1>Admin overview</h1>
+{% if not ai_on %}<div class="msg warning">Claude AI is not connected. Add ANTHROPIC_API_KEY to the .env file and restart. The basic keyword matching works without it.</div>{% endif %}
+<div class="stats">
+  <div class="stat"><b>{{ totals.users }}</b><span>Users</span></div>
+  <div class="stat"><b>{{ totals.jobs_today }}</b><span>Jobs found today</span></div>
+  <div class="stat"><b>{{ totals.applied }}</b><span>Applications sent</span></div>
+  <div class="stat"><b>{{ totals.interviews }}</b><span>Interviews</span></div>
+</div>
+<div class="card">
+  <div class="row" style="justify-content:space-between"><h2>Users</h2><a class="btn" href="{% url 'candidate_new' %}">+ Give access to new user</a></div>
+  <table>
+    <tr><th>Name</th><th>Login</th><th>Jobs today</th><th>AI suggested</th><th>Applied</th><th>Interviews</th><th>Auto mode</th><th>Last search</th><th></th></tr>
+    {% for c in candidates %}
+    <tr>
+      <td><a href="{% url 'candidate_dashboard' c.pk %}">{{ c.full_name }}</a></td>
+      <td>{{ c.user.username }}{% if not c.user.is_active %} <span class="badge">disabled</span>{% endif %}</td>
+      <td>{{ c.jobs_today }}</td><td>{{ c.suggested }}</td><td>{{ c.applied }}</td><td>{{ c.interviews }}</td>
+      <td>{% if c.auto_enabled %}{{ c.get_auto_mode_display }}{% else %}Off{% endif %}</td>
+      <td>{{ c.last_search_at|default:"never" }}</td>
+      <td>{% if c.user != user %}<form method="post" action="{% url 'candidate_toggle_access' c.pk %}">{% csrf_token %}<button class="secondary">{% if c.user.is_active %}Disable login{% else %}Enable login{% endif %}</button></form>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="9">No users yet. Click "Give access to new user".</td></tr>{% endfor %}
+  </table>
+</div>
+<div class="card"><h2>Recent activity</h2>
+  <table>{% for l in recent_log %}<tr><td class="muted">{{ l.created_at|date:"d M H:i" }}</td><td>{{ l.actor|default:"system" }}</td><td>{{ l.candidate|default:"" }}</td><td>{{ l.action }}</td></tr>{% endfor %}</table>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="card"><h2>Questions from the AI</h2>
+<p class="muted">The AI never guesses facts about you. When it needs true information, it asks here. Your answers are used in future CVs and cover letters for you only.</p>
+{% for q in questions %}
+<form method="post" class="card">{% csrf_token %}<input type="hidden" name="qid" value="{{ q.pk }}">
+  <b>{{ q.question }}</b>{% if q.job %} <span class="muted">(for: {{ q.job.title }})</span>{% endif %}
+  <textarea name="answer" rows="2">{{ q.answer }}</textarea><p></p>
+  <div class="row"><button>Save answer</button><button class="secondary" name="delete" value="1">Not relevant - remove</button></div>
+</form>
+{% empty %}<p class="muted">No questions right now.</p>{% endfor %}
+</div>
+{% endblock %}

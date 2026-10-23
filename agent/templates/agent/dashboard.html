@@ -1,0 +1,35 @@
+{% extends "agent/base.html" %}
+{% block content %}
+{% if not c.cvs.exists %}<div class="msg warning">Step 1: <a href="{% url 'candidate_profile' c.pk %}">upload at least one CV</a> and add the job types you want.</div>{% endif %}
+<div class="stats">
+  <div class="stat"><b>{{ stats.jobs_today }}</b><span>Jobs found today</span></div>
+  <div class="stat"><b>{{ stats.suggested_today }}</b><span>AI suggested today</span></div>
+  <div class="stat"><b>{{ stats.drafts }}</b><span>Applications to review</span></div>
+  <div class="stat"><b>{{ stats.applied }}</b><span>Applied (total)</span></div>
+  <div class="stat"><b>{{ stats.applied_today }}</b><span>Applied today</span></div>
+  <div class="stat"><b>{{ stats.interviews }}</b><span>Interviews</span></div>
+  <div class="stat"><b>{{ stats.follow_ups_due }}</b><span>Follow-ups due</span></div>
+  <div class="stat"><b>{{ stats.open_questions }}</b><span><a href="{% url 'questions' c.pk %}">AI questions for you</a></span></div>
+</div>
+<div class="grid">
+  <div class="card">
+    <h2>Search jobs now</h2>
+    <form method="post" action="{% url 'jobs' c.pk %}">{% csrf_token %}<input type="hidden" name="action" value="search">
+      {{ search_form.keywords }}<p class="muted">Automatic search runs every day at 8:00 AM (Auckland time). Last search: {{ c.last_search_at|default:"never" }}</p>
+      <button>Search jobs</button></form>
+  </div>
+  <div class="card">
+    <h2>AI daily summary</h2>
+    {% if c.last_insight %}<pre>{{ c.last_insight }}</pre><p class="muted">Updated {{ c.last_insight_at }}</p>{% else %}<p class="muted">No summary yet.</p>{% endif %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="insight"><button class="secondary">{% if ai_on %}Ask AI for today's summary{% else %}Get basic summary{% endif %}</button></form>
+  </div>
+</div>
+<div class="card">
+  <h2>Top suggested jobs</h2>
+  <table><tr><th>Score</th><th>Job</th><th>Site</th><th>Found</th></tr>
+  {% for j in top_jobs %}<tr><td>{% include "agent/_score.html" with s=j.match_score %}</td><td><a href="{% url 'job_detail' c.pk j.pk %}">{{ j.title }}</a> <span class="muted">{{ j.company }}</span></td><td>{{ j.site|default:j.get_source_display }}</td><td class="muted">{{ j.found_at|date:"d M" }}</td></tr>
+  {% empty %}<tr><td colspan="4" class="muted">No suggestions yet. Run a search or add a job.</td></tr>{% endfor %}</table>
+</div>
+{% if follow_ups %}<div class="card"><h2>Follow-ups due</h2><table>
+{% for a in follow_ups %}<tr><td><a href="{% url 'job_detail' c.pk a.job.pk %}">{{ a.job.title }}</a></td><td>{{ a.job.company }}</td><td>due {{ a.follow_up_date }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% endblock %}

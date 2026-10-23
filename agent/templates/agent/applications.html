@@ -1,0 +1,10 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="card"><h2>Application records</h2>
+<table><tr><th>Job</th><th>Company</th><th>Status</th><th>Applied</th><th>Follow-up</th><th>Interview</th></tr>
+{% for a in apps %}<tr>
+  <td><a href="{% url 'job_detail' c.pk a.job.pk %}">{{ a.job.title }}</a></td><td>{{ a.job.company }}</td>
+  <td><form method="post" class="row">{% csrf_token %}<input type="hidden" name="app_id" value="{{ a.pk }}"><select name="status" onchange="this.form.submit()">{% for k,v in statuses %}<option value="{{ k }}" {% if k == a.status %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></form></td>
+  <td>{{ a.applied_at|default:"-" }}</td><td>{{ a.follow_up_date|default:"-" }}</td><td>{{ a.interview_date|default:"-" }}</td></tr>
+{% empty %}<tr><td colspan="6" class="muted">No applications yet. Open a job and click "Create CV + cover letter".</td></tr>{% endfor %}</table></div>
+{% endblock %}

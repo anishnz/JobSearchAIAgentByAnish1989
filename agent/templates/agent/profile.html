@@ -1,0 +1,24 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h2>Profile and job preferences</h2>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="profile">{{ pform.as_p }}
+      <p class="muted">Auto mode is OFF by default. Even when on, the agent only prepares applications - you submit them yourself on the employer's website.</p>
+      <button>Save profile</button></form>
+  </div>
+  <div>
+    <div class="card">
+      <h2>Your CVs ({{ c.cvs.count }})</h2>
+      <table>{% for cv in c.cvs.all %}<tr><td><a href="{% url 'cv_edit' c.pk cv.pk %}">{{ cv.title }}</a></td><td class="muted">{{ cv.updated_at|date:"d M Y" }}</td>
+        <td><form method="post" action="{% url 'cv_delete' c.pk cv.pk %}">{% csrf_token %}<button class="secondary">Delete</button></form></td></tr>
+      {% empty %}<tr><td class="muted">No CV yet. Add one below. You can add more than one (e.g. Hospitality CV, Admin CV).</td></tr>{% endfor %}</table>
+    </div>
+    <div class="card">
+      <h2>Add a CV</h2>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="cv">{{ cvform.as_p }}<button>Save CV</button></form>
+      <p class="muted">Tip: do not include passport, visa or IRD numbers or your date of birth. NZ employers do not need them on a CV.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
