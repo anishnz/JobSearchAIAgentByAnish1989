@@ -32,3 +32,6 @@ class AuditLogAdmin(admin.ModelAdmin):
 admin.site.register(CVDocument)
 admin.site.register(AIQuestion)
 admin.site.site_header = "JobSearchAIAgentByAnish1989 - Admin"
+admin.site.site_title = "Job Search AI Agent admin"
+admin.site.index_title = "Manage users, CVs, jobs and applications"
+admin.site.site_url = "/"

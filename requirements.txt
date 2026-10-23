@@ -7,3 +7,4 @@ python-docx==1.1.2
 tzdata==2024.2
 gunicorn==23.0.0
 openpyxl==3.1.5
+whitenoise==6.8.2

@@ -118,3 +118,13 @@ class CVImportAndSelectionTests(TestCase):
         User.objects.create_user("u", password="x")
         self.client.login(username="u", password="x")
         self.assertContains(self.client.get("/help/"), "How to use")
+
+
+class AdminDesignTests(TestCase):
+    def test_admin_pages_render(self):
+        User.objects.create_superuser("boss", password="x")
+        self.assertContains(self.client.get("/admin/login/"), "JobSearchAIAgentByAnish1989")
+        self.client.login(username="boss", password="x")
+        r = self.client.get("/admin/")
+        self.assertContains(r, "Manage users, CVs, jobs and applications")
+        self.assertEqual(self.client.get("/admin/agent/candidate/").status_code, 200)

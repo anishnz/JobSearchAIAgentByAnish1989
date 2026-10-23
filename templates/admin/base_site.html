@@ -1,0 +1,21 @@
+{% extends "admin/base.html" %}
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:"Admin" }}{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  /* Simple look matching the main dashboard */
+  :root, html[data-theme="light"] {
+    --primary: #0f2747; --secondary: #1f6feb; --header-bg: #0f2747; --header-color: #fff;
+    --breadcrumbs-bg: #1f6feb; --link-fg: #1f6feb; --link-hover-color: #0f2747;
+    --button-bg: #1f6feb; --button-hover-bg: #0f2747; --default-button-bg: #1f6feb;
+    --default-button-hover-bg: #0f2747; --selected-row: #eaf2ff;
+  }
+  body { font-family: "Segoe UI", Roboto, Arial, sans-serif; }
+  #header { padding: 12px 24px; }
+  #branding h1, #branding h1 a:link, #branding h1 a:visited { font-weight: 700; font-size: 20px; }
+  .module h2, .module caption { background: #0f2747; }
+  #content { padding: 20px 24px; }
+</style>
+{% endblock %}
+{% block branding %}<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>
+{% if user.is_anonymous %}{% include "admin/color_theme_toggle.html" %}{% endif %}{% endblock %}
+{% block nav-global %}{% endblock %}
