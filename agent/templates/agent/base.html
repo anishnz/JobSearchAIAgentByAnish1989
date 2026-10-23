@@ -34,6 +34,7 @@ label{font-weight:600;display:block;margin:10px 0 4px}.helptext{color:var(--mute
   <a class="brand" href="{% url 'home' %}">JobSearchAIAgentByAnish1989</a>
   {% if user.is_authenticated %}
     {% if user.is_staff %}<a href="{% url 'home' %}">Admin overview</a><a href="{% url 'candidate_new' %}">Give access</a><a href="{% url 'audit' %}">Audit log</a><a href="/admin/">Django admin</a>{% endif %}
+    <a href="{% url 'help' %}">Help</a>
     <div class="right"><span>{{ user.username }}</span>
       <form method="post" action="{% url 'logout' %}" style="margin:0">{% csrf_token %}<button class="secondary">Log out</button></form></div>
   {% endif %}

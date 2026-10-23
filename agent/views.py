@@ -73,6 +73,13 @@ def candidate_stats(candidate):
     }
 
 
+# ------------------------------------------------------------------ help
+@login_required
+def help_page(request):
+    own = Candidate.objects.filter(user=request.user).first()
+    return render(request, "agent/help.html", {"own": own, "ai_on": services.claude_available()})
+
+
 # ------------------------------------------------------------------ home / admin
 @login_required
 def home(request):

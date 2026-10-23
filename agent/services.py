@@ -189,13 +189,33 @@ def _parse_json(text):
         return {}
 
 
-def _candidate_block(candidate):
+def relevant_cvs(candidate, job, n=2):
+    """Pick this candidate's CVs that best fit the job (by title, 'best for' and content words)."""
+    cvs = list(candidate.cvs.all())
+    if len(cvs) <= n:
+        return cvs
+    job_title = _words(job.title)
+    job_words = _words(f"{job.title} {job.description[:3000]}")
+
+    def score(cv):
+        head = _words(f"{cv.title} {cv.best_for} {cv.category}")
+        return 5 * len(head & job_title) + len(head & job_words) + 0.05 * len(_words(cv.text[:1500]) & job_words)
+
+    return sorted(cvs, key=score, reverse=True)[:n]
+
+
+def _candidate_block(candidate, job=None):
+    if job is not None:
+        chosen = relevant_cvs(candidate, job)
+        cv_text = "\n\n".join(f"--- CV: {cv.title} ---\n{cv.text}" for cv in chosen)[:15000]
+    else:
+        cv_text = candidate.all_cv_text()
     return (
         f"CANDIDATE: {candidate.full_name}\nLocation: {candidate.location}\n"
         f"Wanted job types: {candidate.job_types}\nAvailability: {candidate.availability}\n"
         f"Extra true facts: {candidate.extra_notes}\n"
         f"Answered questions:\n{candidate.answered_facts() or '(none)'}\n\n"
-        f"CVs:\n{candidate.all_cv_text() or '(no CV uploaded yet)'}"
+        f"CVs (most relevant first):\n{cv_text or '(no CV uploaded yet)'}"
     )
 
 
@@ -218,7 +238,8 @@ def keyword_score(candidate, job):
     job_words = _words(f"{job.title} {job.description}")
     if not job_words:
         return 0, "No job description yet - open the job link or paste the description, then score again."
-    overlap = _words(f"{candidate.job_types} {candidate.all_cv_text(8000)}") & job_words
+    cv_text = " ".join(f"{cv.title} {cv.best_for} {cv.text}" for cv in relevant_cvs(candidate, job))
+    overlap = _words(f"{candidate.job_types} {cv_text}") & job_words
     title_hit = any(k.lower() in job.title.lower() for k in candidate.keyword_list())
     score = min(100, len(overlap) * 3 + (35 if title_hit else 0))
     reason = (f"Basic keyword match (no AI key set). Matching words: {', '.join(sorted(overlap)[:15]) or 'none'}."
@@ -231,7 +252,7 @@ def score_job(candidate, job):
     if not claude_available():
         score, reason = keyword_score(candidate, job)
         return score, reason, []
-    prompt = (f"{_candidate_block(candidate)}\n\n{_job_block(job)}\n\n"
+    prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
               "Rate how suitable this job is for this candidate (0-100), considering essential requirements, "
               "availability, location and the chance of getting an interview. Reply with JSON only:\n"
               '{"score": 0, "reason": "2-4 short sentences", "improve": "one tip", '
@@ -246,7 +267,8 @@ def score_job(candidate, job):
 def generate_documents(candidate, job):
     """Return dict with cv, cover_letter, email."""
     if not claude_available():
-        base_cv = candidate.cvs.first()
+        chosen = relevant_cvs(candidate, job, n=1)
+        base_cv = chosen[0] if chosen else None
         return {
             "cv": base_cv.text if base_cv else "",
             "cover_letter": (f"Dear Hiring Manager,\n\nI am applying for the {job.title} role"
@@ -256,7 +278,7 @@ def generate_documents(candidate, job):
             "email": (f"Subject: Application - {job.title}\n\nKia ora,\n\nPlease find my CV and cover letter "
                       f"attached for the {job.title} role.\n\nNgā mihi,\n{candidate.full_name}"),
         }
-    prompt = (f"{_candidate_block(candidate)}\n\n{_job_block(job)}\n\n"
+    prompt = (f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\n"
               "Write, for THIS job only:\n"
               "1) A one-page NZ-style ATS-friendly CV in plain text that includes only relevant true experience.\n"
               "2) A short cover letter (under 250 words).\n3) A short application email with a subject line.\n"
@@ -289,7 +311,7 @@ def interview_prep(candidate, job):
                 "and sample answers based on your CV.)")
     else:
         body = ask_claude(
-            f"{_candidate_block(candidate)}\n\n{_job_block(job)}\n\nPrepare interview practice for this job: "
+            f"{_candidate_block(candidate, job)}\n\n{_job_block(job)}\n\nPrepare interview practice for this job: "
             "10 likely questions, a short sample answer for each using ONLY the candidate's true background, "
             "3 good questions to ask the employer, and 3 tips. Plain text with headings.", max_tokens=3000)
     return f"{body}\n\nVIDEO PRACTICE (YouTube searches)\n{links}"

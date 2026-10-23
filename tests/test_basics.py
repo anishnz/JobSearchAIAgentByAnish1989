@@ -86,3 +86,35 @@ class PageTests(TestCase):
                                                       "min_match_score": 65, "auto_mode": "auto", "auto_consent": "on"})
         self.c.refresh_from_db()
         self.assertFalse(self.c.auto_consent)
+
+
+class CVImportAndSelectionTests(TestCase):
+    def test_setup_candidate_imports_folder_and_picks_relevant_cv(self):
+        import tempfile
+        from pathlib import Path
+
+        import docx
+        from django.core.management import call_command
+
+        from agent.services import relevant_cvs
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for folder, text in [("01 Hospitality/01 Kitchen Hand", "Kitchen hand dishwashing food prep " * 10),
+                                 ("02 IT/01 Software Engineer", "Software engineer Python Django Laravel " * 10)]:
+                d = Path(tmp, "Group", folder)
+                d.mkdir(parents=True)
+                doc = docx.Document()
+                doc.add_paragraph(text)
+                doc.save(d / "cv.docx")
+            call_command("setup_candidate", username="anish", full_name="Anish", admin=True, cv_folder=tmp)
+        c = Candidate.objects.get(user__username="anish")
+        self.assertTrue(c.user.is_superuser)
+        self.assertEqual(c.cvs.count(), 2)
+        job = Job.objects.create(candidate=c, title="Kitchen Hand", description="dishwashing",
+                                 fingerprint=fingerprint("Kitchen Hand"))
+        self.assertIn("Kitchen", relevant_cvs(c, job, n=1)[0].title)
+
+    def test_help_page(self):
+        User.objects.create_user("u", password="x")
+        self.client.login(username="u", password="x")
+        self.assertContains(self.client.get("/help/"), "How to use")

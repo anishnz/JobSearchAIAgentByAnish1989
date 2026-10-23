@@ -64,10 +64,13 @@ class CVDocument(models.Model):
     title = models.CharField(max_length=120, help_text="e.g. Hospitality CV, Admin CV")
     text = models.TextField(help_text="CV content as plain text. You can edit this any time.")
     uploaded_file = models.FileField(upload_to="cvs/%Y/%m", blank=True)
+    category = models.CharField(max_length=120, blank=True, help_text="e.g. IT: Software, Hospitality")
+    best_for = models.CharField(max_length=255, blank=True, help_text="Which jobs this CV is best for.")
+    source_path = models.CharField(max_length=500, blank=True, help_text="Original file location (for your reference).")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-updated_at"]
+        ordering = ["category", "title"]
 
     def __str__(self):
         return f"{self.candidate} - {self.title}"

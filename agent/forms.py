@@ -41,7 +41,7 @@ class CVForm(forms.ModelForm):
 
     class Meta:
         model = CVDocument
-        fields = ["title", "text"]
+        fields = ["title", "category", "best_for", "text"]
         widgets = {"text": forms.Textarea(attrs={"rows": 12})}
 
     def __init__(self, *args, **kwargs):

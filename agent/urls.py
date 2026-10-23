@@ -7,6 +7,7 @@ urlpatterns = [
     path("users/new/", views.candidate_new, name="candidate_new"),
     path("users/<int:cid>/toggle/", views.candidate_toggle_access, name="candidate_toggle_access"),
     path("audit/", views.audit, name="audit"),
+    path("help/", views.help_page, name="help"),
     path("c/<int:cid>/", views.candidate_dashboard, name="candidate_dashboard"),
     path("c/<int:cid>/profile/", views.candidate_profile, name="candidate_profile"),
     path("c/<int:cid>/cv/<int:pk>/", views.cv_edit, name="cv_edit"),

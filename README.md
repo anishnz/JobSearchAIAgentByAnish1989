@@ -25,6 +25,7 @@ applications and AI questions are never mixed with another person's.
 | `start.bat` | Starts Docker and the app, checks the port is free, sets up `.env` and the admin login on first run, opens the dashboard |
 | `stop.bat` | Stops the app (data is kept) |
 | `search_now.bat` | Runs the job search now for every active user |
+| `set_password.bat` | Sets or changes a login password |
 | `create_admin.bat` | Creates another admin login |
 | `logs.bat` | Shows live logs (for problems) |
 | `backup.bat` | Copies the `data` folder to `backups\data_<date>` |
@@ -50,6 +51,15 @@ docker compose exec web python manage.py test tests   # run the tests
 docker compose down                                   # stop
 ```
 All data (database and uploads) is saved in the `data\` folder. Back up this folder.
+
+## Help page
+After logging in, click **Help** in the top menu for a step-by-step guide.
+
+## Import many CVs for one person
+```powershell
+docker compose exec web python manage.py setup_candidate --username NAME --full-name "Full Name" --cv-folder /app/data/import/FOLDER
+```
+Copy the folder into `data\import\` first. An optional `CV_Index.xlsx` (sheet "All CVs") adds job position names, categories and "best for" notes. When creating documents, the AI picks the person's most relevant CV for each job.
 
 ## Claude API
 Get a key at https://console.anthropic.com. API usage is pay-as-you-go and is separate from a Claude.ai

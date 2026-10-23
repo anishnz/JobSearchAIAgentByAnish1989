@@ -10,7 +10,7 @@
   <div>
     <div class="card">
       <h2>Your CVs ({{ c.cvs.count }})</h2>
-      <table>{% for cv in c.cvs.all %}<tr><td><a href="{% url 'cv_edit' c.pk cv.pk %}">{{ cv.title }}</a></td><td class="muted">{{ cv.updated_at|date:"d M Y" }}</td>
+      <table>{% for cv in c.cvs.all %}<tr><td><a href="{% url 'cv_edit' c.pk cv.pk %}">{{ cv.title }}</a>{% if cv.category %}<br><span class="muted">{{ cv.category }}</span>{% endif %}</td><td class="muted">{{ cv.updated_at|date:"d M Y" }}</td>
         <td><form method="post" action="{% url 'cv_delete' c.pk cv.pk %}">{% csrf_token %}<button class="secondary">Delete</button></form></td></tr>
       {% empty %}<tr><td class="muted">No CV yet. Add one below. You can add more than one (e.g. Hospitality CV, Admin CV).</td></tr>{% endfor %}</table>
     </div>
