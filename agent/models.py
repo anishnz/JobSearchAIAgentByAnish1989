@@ -156,6 +156,7 @@ class Job(models.Model):
     match_reason = models.TextField(blank=True)
     status = models.CharField(max_length=12, choices=STATUSES, default="new")
     found_at = models.DateTimeField(default=timezone.now)
+    saved_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-found_at"]

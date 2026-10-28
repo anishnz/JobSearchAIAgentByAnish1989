@@ -403,8 +403,10 @@ def job_detail(request, cid, pk):
             messages.success(request, "Application saved.")
         else:
             messages.error(request, "Please check the form.")
+    elif action == "toggle_save":
+        toggle_save(request, candidate, job)
     elif action == "send_email" and app:
-        send_application_email(request, candidate, job, app)
+        return redirect("job_send", cid=cid, pk=pk)
     if action:
         return redirect("job_detail", cid=cid, pk=pk)
     app = getattr(job, "application", None)
@@ -427,36 +429,118 @@ def mark_applied(request, candidate, job, app):
     AuditLog.log("marked_applied", str(job), actor=request.user, candidate=candidate)
 
 
-def send_application_email(request, candidate, job, app):
-    """Send the reviewed application from the user's own Gmail (only when they click Send)."""
-    if candidate.user_id != request.user.id:
-        messages.error(request, "Only the job seeker can send their own application.")
-        return
-    if not candidate.gmail_ready:
-        messages.error(request, "Set up your Gmail first on the Settings page.")
-        return
-    if not app.employer_email:
-        messages.error(request, "Add the employer's email address below, save, then click Send.")
-        return
-    subject, body = services.split_email_draft(app.email_draft, f"Application - {job.title}")
+def toggle_save(request, candidate, job):
+    if job.saved_at:
+        job.saved_at = None
+        messages.info(request, "Removed from your saved jobs.")
+    else:
+        job.saved_at = timezone.now()
+        messages.success(request, "I have saved it. ✓ It stays in your list.")
+    job.save(update_fields=["saved_at"])
+    AuditLog.log("job_saved" if job.saved_at else "job_unsaved", str(job), actor=request.user, candidate=candidate)
+
+
+def application_files(candidate, app):
+    """The two PDF attachments (CV and cover letter)."""
     name = slugify(candidate.full_name)
     files = []
-    docx_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     if app.cv_text:
-        files.append((f"{name}-CV.docx", services.make_docx(app.cv_text), docx_mime))
+        heading = candidate.full_name if not app.cv_text.startswith(candidate.full_name) else ""
+        files.append((f"{name}-CV.pdf", services.make_pdf(app.cv_text, heading=heading), "application/pdf"))
     if app.cover_letter:
-        files.append((f"{name}-Cover-Letter.docx", services.make_docx(app.cover_letter), docx_mime))
-    try:
-        services.send_gmail(candidate.gmail_address, candidate.gmail_app_password, app.employer_email,
-                            subject, body or "Please find my CV and cover letter attached.", files)
-    except Exception as exc:
-        messages.error(request, f"Email not sent: {exc.__class__.__name__}. Check your Gmail settings.")
-        return
-    app.email_sent_at = timezone.now()
-    app.save(update_fields=["email_sent_at"])
-    mark_applied(request, candidate, job, app)
-    AuditLog.log("application_emailed", f"{job} -> {app.employer_email}", actor=request.user, candidate=candidate)
-    messages.success(request, f"Application sent to {app.employer_email} and recorded as applied.")
+        files.append((f"{name}-Cover-Letter.pdf", services.make_pdf(app.cover_letter), "application/pdf"))
+    return files
+
+
+@login_required
+def job_send(request, cid, pk):
+    """Quick check box: To / Subject / message / 2 PDF files. Nothing is sent until the owner clicks Send."""
+    candidate = get_candidate(request, cid)
+    job = get_object_or_404(Job, pk=pk, candidate=candidate)
+    app = getattr(job, "application", None)
+    if app is None or not app.cv_text:
+        messages.error(request, "Create the CV and cover letter first.")
+        return redirect("job_detail", cid=cid, pk=pk)
+    default_subject, default_body = services.split_email_draft(app.email_draft, f"Application - {job.title}")
+    files = application_files(candidate, app)
+    if request.method == "POST":
+        to = request.POST.get("to", "").strip()
+        subject = request.POST.get("subject", "").strip() or default_subject
+        body = request.POST.get("body", "").strip() or "Please find my CV and cover letter attached."
+        error = ""
+        if candidate.user_id != request.user.id:
+            error = "Only the job seeker can send their own application."
+        elif not candidate.gmail_ready:
+            error = "Set up your Gmail first on the Settings page."
+        elif "@" not in to:
+            error = "Please type the employer's email address."
+        elif app.email_sent_at and not request.POST.get("resend"):
+            error = "This application was already emailed. Tick the box to send it again."
+        if error:
+            messages.error(request, error)
+        else:
+            try:
+                services.send_gmail(candidate.gmail_address, candidate.gmail_app_password, to, subject, body, files)
+            except Exception as exc:
+                messages.error(request, f"Email not sent: {exc.__class__.__name__}. Check your Gmail settings.")
+                error = "failed"
+        if not error:
+            app.employer_email = to
+            app.email_sent_at = timezone.now()
+            app.save(update_fields=["employer_email", "email_sent_at"])
+            if not job.saved_at:
+                job.saved_at = timezone.now()
+                job.save(update_fields=["saved_at"])
+            mark_applied(request, candidate, job, app)
+            AuditLog.log("application_emailed", f"{job} -> {to}", actor=request.user, candidate=candidate)
+            messages.success(request, f"Sent to {to}. Saved and recorded as applied. ✓")
+            return redirect("job_detail", cid=cid, pk=pk)
+        default_subject, default_body = subject, body
+        app.employer_email = to or app.employer_email
+    ctx = {"c": candidate, "job": job, "app": app, "subject": default_subject, "body": default_body,
+           "files": [f[0] for f in files], "active": "jobs"}
+    return render(request, "agent/job_send.html", ctx)
+
+
+@login_required
+def week(request, cid):
+    """This week: every job found in the last 7 days, as a table. Also Save star and Excel download."""
+    candidate = get_candidate(request, cid)
+    if request.method == "POST" and request.POST.get("action") == "toggle_save":
+        job = get_object_or_404(Job, pk=request.POST.get("job_id"), candidate=candidate)
+        toggle_save(request, candidate, job)
+        return redirect(f"{reverse('week', args=[cid])}{'?saved=1' if request.POST.get('saved_only') else ''}")
+    saved_only = bool(request.GET.get("saved"))
+    rows = services.week_jobs(candidate, saved_only)
+    ctx = {"c": candidate, "rows": rows, "saved_only": saved_only, "days": services.WEEK_DAYS,
+           "total_all": candidate.jobs.count(), "active": "week"}
+    return render(request, "agent/week.html", ctx)
+
+
+@login_required
+def week_download(request, cid):
+    candidate = get_candidate(request, cid)
+    data = services.week_xlsx(candidate, bool(request.GET.get("saved")))
+    name = f"{candidate.slug}-jobs-{timezone.localdate():%Y-%m-%d}.xlsx"
+    resp = HttpResponse(data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{name}"'
+    return resp
+
+
+@login_required
+def download_pdf(request, cid, pk, kind):
+    candidate = get_candidate(request, cid)
+    app = get_object_or_404(Application, pk=pk, candidate=candidate)
+    fields = {"cv": ("cv_text", "CV"), "cover-letter": ("cover_letter", "Cover Letter")}
+    if kind not in fields:
+        raise PermissionDenied
+    field, label = fields[kind]
+    content = getattr(app, field)
+    heading = candidate.full_name if kind == "cv" and not content.startswith(candidate.full_name) else ""
+    name = slugify(f"{candidate.full_name} {label} {app.job.company or app.job.title}")[:80]
+    resp = HttpResponse(services.make_pdf(content, heading=heading), content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{name}.pdf"'
+    return resp
 
 
 @login_required

@@ -5,6 +5,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
+
+def _load_env_file(path):
+    """Read KEY=VALUE lines from .env (used when running without Docker). Existing variables are never replaced."""
+    try:
+        for raw in path.read_text(encoding="utf-8-sig").splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    except OSError:
+        pass
+
+
+_load_env_file(BASE_DIR / ".env")
+
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-insecure-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 # Home-network use: users open the app by the laptop's Wi-Fi address or *.localhost names.

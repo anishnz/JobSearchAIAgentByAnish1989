@@ -100,3 +100,19 @@ tests/         automated tests
 - `.env` (API key) and `data/` (personal CVs) are excluded from git. Never commit them.
 - Do not put passport, visa or IRD numbers or date of birth in CVs.
 - Job pages are treated as untrusted text; the AI is told to ignore instructions inside them.
+
+
+## Start and stop files (see START_HERE.txt)
+
+| With Docker | Without Docker | What it does |
+|---|---|---|
+| docker-start.bat | nodocker-start.bat | Port check first (next free port is saved in .env), then start |
+| docker-pause.bat | nodocker-pause.bat | Pause the daily search, website stays open |
+| docker-resume.bat | nodocker-resume.bat | Start the daily search again |
+| docker-stop.bat | nodocker-stop.bat | Stop everything |
+
+## This week, Save and Send
+
+- **This week** page: table of jobs found in the last 7 days (older jobs stay in the database). Save star, "Saved only" filter, Excel download.
+- Every daily search also saves an Excel copy in `data/exports/<person>/`.
+- Job page: CV and cover letter as PDF and Word. **Send application** opens a check box (To, Subject, message, 2 PDF files) and sends only after you click Send. A second send needs a tick in "Send again".

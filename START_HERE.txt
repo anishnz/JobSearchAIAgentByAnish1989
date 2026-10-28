@@ -1,0 +1,28 @@
+JobSearchAIAgentByAnish1989 - START HERE
+=========================================
+
+You can run the app in TWO ways. Use ONE at a time (they share the same data folder).
+
+A) WITH DOCKER  (needs Docker Desktop)
+   docker-start.bat    Start the app
+   docker-pause.bat    Pause the daily 8:00 AM search (website stays open)
+   docker-resume.bat   Start the daily search again
+   docker-stop.bat     Stop everything
+   Also (Docker only): search_now.bat, logs.bat, import_cvs.bat, create_admin.bat, set_password.bat, run_tests.bat
+   (start.bat and stop.bat still work: they run docker-start.bat and docker-stop.bat)
+
+B) WITHOUT DOCKER  (needs Python 3.11+ on this laptop, nothing else)
+   nodocker-start.bat    Start the app (first time installs the packages, takes a few minutes)
+   nodocker-pause.bat    Pause the daily 8:00 AM search (website stays open)
+   nodocker-resume.bat   Start the daily search again
+   nodocker-stop.bat     Stop everything
+   The app runs in two small minimized windows. Do not close them while you work.
+   The daily search runs only while the laptop is on.
+
+PORT CHECK (both ways, done first)
+   The start file checks the port in the .env file (APP_PORT, normally 8010).
+   If another program uses it (for example your ERP), it picks the next free
+   port (8011, 8012 ...), saves it in .env and shows you the new link.
+
+Same for both ways: your data, users, CVs and jobs are in the "data" folder.
+Backup: backup.bat.   Help inside the app: the "Help" link in the left menu.

@@ -71,6 +71,7 @@ pre{white-space:pre-wrap;font-family:inherit;background:#f8fafc;border:1px solid
       {% if nav_c.user != user %}<div class="sect">Viewing: {{ nav_c.full_name }}</div>{% else %}<div class="sect">My job search</div>{% endif %}
       <a class="nav {% if active == 'dashboard' %}on{% endif %}" href="{% url 'candidate_dashboard' nav_c.pk %}">🏠 Dashboard</a>
       <a class="nav {% if active == 'jobs' %}on{% endif %}" href="{% url 'jobs' nav_c.pk %}">🔎 Find jobs</a>
+      <a class="nav {% if active == 'week' %}on{% endif %}" href="{% url 'week' nav_c.pk %}">📅 This week</a>
       <a class="nav {% if active == 'applications' %}on{% endif %}" href="{% url 'applications' nav_c.pk %}">📋 My applications</a>
       <a class="nav {% if active == 'questions' %}on{% endif %}" href="{% url 'questions' nav_c.pk %}">💬 AI questions</a>
       <a class="nav {% if active == 'profile' %}on{% endif %}" href="{% url 'candidate_profile' nav_c.pk %}">👤 My profile &amp; CVs</a>

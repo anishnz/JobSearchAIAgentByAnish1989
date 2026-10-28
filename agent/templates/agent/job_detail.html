@@ -2,7 +2,7 @@
 {% block content %}
 <div class="top">
   <div><h1>{{ job.title }}</h1><p>{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}{% if job.site %} · {{ job.site }}{% endif %}</p></div>
-  <div class="row">{% if job.url %}<a class="btn light" href="{{ job.url }}" target="_blank" rel="noopener">Open job advert ↗</a>{% endif %}
+  <div class="row"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle_save"><button class="{% if job.saved_at %}green{% else %}light{% endif %}">{% if job.saved_at %}⭐ Saved ✓ {{ job.saved_at|date:"d M" }}{% else %}☆ Save this job{% endif %}</button></form>{% if job.url %}<a class="btn light" href="{{ job.url }}" target="_blank" rel="noopener">Open job advert ↗</a>{% endif %}
     <a class="btn wa" href="{{ wa_job }}" target="_blank" rel="noopener">Share on WhatsApp</a></div>
 </div>
 <div class="grid">
@@ -28,8 +28,8 @@
 {% if app %}
 <div class="card">
   <div class="row" style="justify-content:space-between"><h2>My application</h2>
-  <div class="row">{% if app.cv_text %}<a class="btn light" href="{% url 'download_docx' c.pk app.pk 'cv' %}">⬇ CV (Word)</a>{% endif %}
-  {% if app.cover_letter %}<a class="btn light" href="{% url 'download_docx' c.pk app.pk 'cover-letter' %}">⬇ Cover letter</a>{% endif %}
+  <div class="row">{% if app.cv_text %}<a class="btn light" href="{% url 'download_pdf' c.pk app.pk 'cv' %}">⬇ CV (PDF)</a><a class="btn light" href="{% url 'download_docx' c.pk app.pk 'cv' %}">⬇ CV (Word)</a>{% endif %}
+  {% if app.cover_letter %}<a class="btn light" href="{% url 'download_pdf' c.pk app.pk 'cover-letter' %}">⬇ Cover letter (PDF)</a><a class="btn light" href="{% url 'download_docx' c.pk app.pk 'cover-letter' %}">⬇ Cover letter (Word)</a>{% endif %}
   {% if app.interview_prep %}<a class="btn light" href="{% url 'download_docx' c.pk app.pk 'interview' %}">⬇ Interview prep</a>{% endif %}
   {% if wa_app %}<a class="btn wa" href="{{ wa_app }}" target="_blank" rel="noopener">Send message via WhatsApp</a>{% endif %}</div></div>
   {% if app.email_sent_at %}<div class="msg success">Emailed to {{ app.employer_email }} on {{ app.email_sent_at|date:"d M Y H:i" }}.</div>{% endif %}
@@ -37,9 +37,13 @@
   {% if c.user == user %}
   <div class="card" style="background:#f8fbff;margin-top:16px">
     <h3>✉️ Send by email (from your Gmail)</h3>
+    <p><b>Status:</b>
+      <span class="badge {% if job.saved_at %}ok{% endif %}">1 Saved{% if job.saved_at %} ✓{% endif %}</span>
+      <span class="badge {% if app.cv_text %}ok{% endif %}">2 Documents ready{% if app.cv_text %} ✓{% endif %}</span>
+      <span class="badge {% if app.email_sent_at %}ok{% endif %}">3 Emailed{% if app.email_sent_at %} ✓ {{ app.email_sent_at|date:"d M H:i" }}{% endif %}</span></p>
     {% if c.gmail_ready %}
-      <p class="muted small">Sends the email above to the employer email, with your CV and cover letter attached as Word files. Check everything first.</p>
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="send_email"><button class="green">Send application now</button></form>
+      <p class="muted small">Opens a check box first. You see the To address, subject and the 2 PDF files, then you click Send.</p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="send_email"><button class="green">✉️ Send application…</button></form>
     {% else %}<p class="muted small">Set up your Gmail in <a href="{% url 'candidate_settings' c.pk %}">Settings</a> to send applications from here.</p>{% endif %}
   </div>{% endif %}
 </div>

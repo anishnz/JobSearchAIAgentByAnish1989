@@ -1,0 +1,20 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>Check before you send</h1><p>{{ job.title }}{% if job.company %} · {{ job.company }}{% endif %}</p></div>
+  <a class="btn light" href="{% url 'job_detail' c.pk job.pk %}">← Back to job</a></div>
+<div class="card">
+  {% if app.email_sent_at %}<div class="msg error">Already emailed on {{ app.email_sent_at|date:"d M Y H:i" }} to {{ app.employer_email }}. Tick “send again” only if you really want to.</div>{% endif %}
+  <form method="post">{% csrf_token %}
+    <p><label><b>From</b></label><br><input value="{{ c.gmail_address }}" disabled></p>
+    <p><label><b>To (employer email)</b></label><br><input type="email" name="to" value="{{ app.employer_email }}" placeholder="jobs@company.co.nz" required></p>
+    <p><label><b>Subject</b></label><br><input name="subject" value="{{ subject }}"></p>
+    <p><label><b>Message</b></label><br><textarea name="body" rows="10">{{ body }}</textarea></p>
+    <p><b>Attachments (PDF):</b> {% for f in files %}<span class="badge">📎 {{ f }}</span> {% empty %}<span class="muted">none</span>{% endfor %}
+    {% if app.cv_text %}<a href="{% url 'download_pdf' c.pk app.pk 'cv' %}" target="_blank">open CV</a>{% endif %}
+    {% if app.cover_letter %} · <a href="{% url 'download_pdf' c.pk app.pk 'cover-letter' %}" target="_blank">open cover letter</a>{% endif %}</p>
+    {% if app.email_sent_at %}<p><label><input type="checkbox" name="resend" value="1" style="width:auto"> Send again</label></p>{% endif %}
+    <p class="muted small">Read the PDF files first. Nothing is sent until you click the button.</p>
+    <button class="green big">Send now</button>
+  </form>
+</div>
+{% endblock %}

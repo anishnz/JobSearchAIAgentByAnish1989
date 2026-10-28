@@ -245,3 +245,73 @@ class SlugTests(TestCase):
     def test_underscore_name_gives_short_link(self):
         c = Candidate.objects.create(user=User.objects.create_user("s2", password="x"), full_name="Saru_Tuitui")
         self.assertEqual(c.slug, "sarucv")
+
+
+class WeekSaveSendTests(TestCase):
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        self.u = User.objects.create_user("anish", password="x")
+        self.c = Candidate.objects.create(user=self.u, full_name="Anish Shrestha", onboarding_done=True,
+                                          gmail_address="me@gmail.com")
+        self.other = Candidate.objects.create(user=User.objects.create_user("saru", password="x"), full_name="Saru")
+        self.new = Job.objects.create(candidate=self.c, title="Kitchen Hand", company="Cafe", url="https://x.nz/1",
+                                      fingerprint=fingerprint("Kitchen Hand", "Cafe"), match_score=80)
+        self.old = Job.objects.create(candidate=self.c, title="Old Job", fingerprint=fingerprint("Old Job"),
+                                      found_at=timezone.now() - timedelta(days=9))
+        Job.objects.create(candidate=self.other, title="Saru Job", fingerprint=fingerprint("Saru Job"))
+        self.client.login(username="anish", password="x")
+
+    def test_week_table_shows_only_last_7_days_and_own_jobs(self):
+        r = self.client.get(f"/c/{self.c.pk}/week/")
+        self.assertContains(r, "Kitchen Hand")
+        self.assertNotContains(r, "Old Job")
+        self.assertNotContains(r, "Saru Job")
+        self.assertEqual(self.c.jobs.count(), 2)  # old job is kept
+
+    def test_save_and_filter(self):
+        self.client.post(f"/c/{self.c.pk}/week/", {"action": "toggle_save", "job_id": self.new.pk})
+        self.new.refresh_from_db()
+        self.assertIsNotNone(self.new.saved_at)
+        self.assertContains(self.client.get(f"/c/{self.c.pk}/week/?saved=1"), "Kitchen Hand")
+        self.client.post(f"/c/{self.c.pk}/jobs/{self.new.pk}/", {"action": "toggle_save"})
+        self.new.refresh_from_db()
+        self.assertIsNone(self.new.saved_at)
+
+    def test_excel_download(self):
+        r = self.client.get(f"/c/{self.c.pk}/week/download.xlsx")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.content.startswith(b"PK"))
+
+    def test_pdf_and_send_guard(self):
+        from unittest import mock
+
+        from agent.models import Application
+
+        app = Application.objects.create(candidate=self.c, job=self.new, cv_text="SUMMARY\n- Reliable worker",
+                                         cover_letter="Dear Manager,\nHello", email_draft="Subject: Kitchen Hand\nHi")
+        r = self.client.get(f"/c/{self.c.pk}/applications/{app.pk}/cv.pdf")
+        self.assertTrue(r.content.startswith(b"%PDF"))
+        self.assertContains(self.client.get(f"/c/{self.c.pk}/jobs/{self.new.pk}/send/"), "Check before you send")
+        url = f"/c/{self.c.pk}/jobs/{self.new.pk}/send/"
+        with mock.patch("agent.services.send_gmail") as sent, \
+                mock.patch.object(Candidate, "gmail_ready", new_callable=mock.PropertyMock, return_value=True):
+            self.client.post(url, {"to": "bad", "subject": "s", "body": "b"})
+            sent.assert_not_called()
+            self.client.post(url, {"to": "boss@cafe.nz", "subject": "s", "body": "b"})
+            self.assertEqual(sent.call_count, 1)
+            files = sent.call_args[0][5]
+            self.assertEqual([f[0] for f in files], ["anish-shrestha-CV.pdf", "anish-shrestha-Cover-Letter.pdf"])
+            self.client.post(url, {"to": "boss@cafe.nz", "subject": "s", "body": "b"})  # duplicate blocked
+            self.assertEqual(sent.call_count, 1)
+        app.refresh_from_db()
+        self.new.refresh_from_db()
+        self.assertEqual(app.status, "applied")
+        self.assertIsNotNone(self.new.saved_at)
+
+    def test_other_user_cannot_open_pages(self):
+        self.client.login(username="saru", password="x")
+        self.assertEqual(self.client.get(f"/c/{self.c.pk}/week/").status_code, 403)
+        self.assertEqual(self.client.get(f"/c/{self.c.pk}/jobs/{self.new.pk}/send/").status_code, 403)

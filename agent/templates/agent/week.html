@@ -1,0 +1,20 @@
+{% extends "agent/base.html" %}
+{% block content %}
+<div class="top"><div><h1>This week</h1><p>Jobs found in the last {{ days }} days. Older jobs are kept safely in the database ({{ total_all }} jobs in total).</p></div>
+  <div class="row"><a class="btn {% if not saved_only %}green{% else %}light{% endif %}" href="{% url 'week' c.pk %}">All this week</a>
+    <a class="btn {% if saved_only %}green{% else %}light{% endif %}" href="{% url 'week' c.pk %}?saved=1">⭐ Saved only</a>
+    <a class="btn" href="{% url 'week_download' c.pk %}{% if saved_only %}?saved=1{% endif %}">⬇ Excel</a></div></div>
+<div class="card" style="overflow-x:auto"><table>
+<tr><th>Save</th><th>Found</th><th>Job</th><th>Company</th><th>Location</th><th>Pay</th><th>Match</th><th>Status</th><th>Application</th><th>Link</th></tr>
+{% for j in rows %}<tr>
+  <td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle_save"><input type="hidden" name="job_id" value="{{ j.pk }}">{% if saved_only %}<input type="hidden" name="saved_only" value="1">{% endif %}<button class="light" title="{% if j.saved_at %}Saved {{ j.saved_at|date:'d M' }}{% else %}Save{% endif %}">{% if j.saved_at %}⭐{% else %}☆{% endif %}</button></form></td>
+  <td>{{ j.found_at|date:"d M" }}</td>
+  <td><a href="{% url 'job_detail' c.pk j.pk %}">{{ j.title }}</a></td>
+  <td>{{ j.company|default:j.site }}</td><td>{{ j.location|default:"–" }}</td><td>{{ j.salary|default:"–" }}</td>
+  <td>{% include "agent/_score.html" with s=j.match_score %}</td>
+  <td><span class="badge {% if j.status == 'suggested' %}ok{% elif j.status == 'applied' %}blue{% endif %}">{{ j.get_status_display }}</span></td>
+  <td>{% if j.application %}{{ j.application.get_status_display }}{% if j.application.email_sent_at %} · ✉️ sent{% endif %}{% else %}–{% endif %}</td>
+  <td>{% if j.url %}<a href="{{ j.url }}" target="_blank" rel="noopener">Open ↗</a>{% else %}–{% endif %}</td></tr>
+{% empty %}<tr><td colspan="10" class="muted">{% if saved_only %}No saved jobs this week.{% else %}No jobs in the last {{ days }} days. Use <b>Find jobs</b> to search.{% endif %}</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

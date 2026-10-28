@@ -92,6 +92,98 @@ def make_docx(text, heading=""):
     return buf.getvalue()
 
 
+def make_pdf(text, heading=""):
+    """Return PDF bytes from plain text (same rules as make_docx: ALL CAPS lines are headings, single column)."""
+    from xml.sax.saxutils import escape
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import ListFlowable, ListItem, Paragraph, SimpleDocTemplate, Spacer
+
+    base = getSampleStyleSheet()["Normal"]
+    body = ParagraphStyle("body", parent=base, fontName="Helvetica", fontSize=10.5, leading=14, spaceAfter=3)
+    h1 = ParagraphStyle("h1", parent=body, fontName="Helvetica-Bold", fontSize=17, leading=21, spaceAfter=6)
+    h2 = ParagraphStyle("h2", parent=body, fontName="Helvetica-Bold", fontSize=11.5, leading=15, spaceBefore=8,
+                        spaceAfter=3, textColor="#1d4f91")
+    story, bullets = [], []
+
+    def flush():
+        if bullets:
+            story.append(ListFlowable([ListItem(Paragraph(escape(b), body)) for b in bullets],
+                                      bulletType="bullet", start="\u2022", leftIndent=14))
+            bullets.clear()
+
+    if heading:
+        story.append(Paragraph(escape(heading), h1))
+    for line in (text or "").splitlines():
+        clean = line.strip().lstrip("#").strip()
+        if not clean:
+            flush()
+            continue
+        if clean.startswith(("- ", "* ", "\u2022 ")):
+            bullets.append(clean[2:].strip())
+            continue
+        flush()
+        if clean.isupper() and len(clean) < 60:
+            story.append(Paragraph(escape(clean.title()), h2))
+        else:
+            story.append(Paragraph(escape(clean), body))
+    flush()
+    story.append(Spacer(1, 2))
+    buf = io.BytesIO()
+    SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=15 * mm,
+                      bottomMargin=15 * mm, title=heading or "Document").build(story)
+    return buf.getvalue()
+
+
+WEEK_DAYS = 7
+
+
+def week_jobs(candidate, saved_only=False):
+    """Jobs found in the last 7 days (older jobs stay in the database, they are just not listed here)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    qs = candidate.jobs.select_related("application").filter(found_at__gte=timezone.now() - timedelta(days=WEEK_DAYS))
+    if saved_only:
+        qs = qs.filter(saved_at__isnull=False)
+    return qs.order_by("-match_score", "-found_at")
+
+
+def week_xlsx(candidate, saved_only=False):
+    """Excel bytes for the 'This week' table."""
+    from django.utils import timezone
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "This week"
+    head = ["Date found", "Job title", "Company", "Location", "Salary", "Match %", "Job status", "Saved",
+            "Application", "Job link"]
+    ws.append(head)
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="1D4F91")
+    for j in week_jobs(candidate, saved_only):
+        app = getattr(j, "application", None)
+        ws.append([timezone.localtime(j.found_at).strftime("%d %b %Y"), j.title, j.company, j.location, j.salary,
+                   j.match_score, j.get_status_display(), "Yes" if j.saved_at else "",
+                   app.get_status_display() if app else "", j.url])
+        if j.url:
+            ws.cell(row=ws.max_row, column=len(head)).hyperlink = j.url
+    for i, w in enumerate([13, 38, 26, 18, 16, 9, 16, 8, 22, 60], start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = ws.dimensions
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------- polite fetching
 _robots_cache = {}
 
