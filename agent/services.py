@@ -120,6 +120,8 @@ def make_pdf(text, heading=""):
         clean = line.strip().lstrip("#").strip()
         if not clean:
             flush()
+            if story and not isinstance(story[-1], Spacer):
+                story.append(Spacer(1, 7))  # keep the blank line between paragraphs
             continue
         if clean.startswith(("- ", "* ", "\u2022 ")):
             bullets.append(clean[2:].strip())
