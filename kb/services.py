@@ -88,3 +88,107 @@ def plain_text(answer):
     if not isinstance(answer, str):
         return answer
     return _HEADING.sub("", _BOLD.sub(r"\2", answer))
+
+
+# ------------------------------------------------------------------ CVs in the knowledge base
+KIND_OF_CATEGORY = {True: "cover_letter", False: "cv"}
+
+
+class KBError(Exception):
+    """A clear English message for the person (service down, no CV yet, AI failed ...)."""
+
+
+def _message(status: int, data) -> str:
+    detail = data.get("detail") if isinstance(data, dict) else ""
+    if status == 401:
+        return "The knowledge base service refused the connection. Ask the admin to check RAG_SERVICE_KEY."
+    if status == 404 and isinstance(detail, str) and detail:
+        return detail
+    if status >= 500:
+        return "The AI model did not answer. Please try again in a moment."
+    return detail if isinstance(detail, str) and detail else f"The knowledge base reported a problem (error {status})."
+
+
+def upload_text(candidate, title: str, text: str, tags: str = "", kind: str = "other", role: str = "user") -> str:
+    """Store plain text in this person's private knowledge base. Returns the new doc_id. Raises KBError."""
+    try:
+        status, data = call_rag(
+            "POST", "/v1/documents", role, owner_of(candidate),
+            files={"file": (f"{(title or 'document')[:60]}.txt", (text or "").encode("utf-8"), "text/plain")},
+            data={"title": title[:120], "tags": tags[:120], "kind": kind, "shared": "0"},
+        )
+    except RagUnavailable as exc:
+        raise KBError("The knowledge base service is not running right now. Please try again later.") from exc
+    if status != 200 or not isinstance(data, dict) or "doc_id" not in data:
+        raise KBError(_message(status, data))
+    return data["doc_id"]
+
+
+def delete_doc(candidate, doc_id: str) -> bool:
+    """Delete one of this person's documents (candidate object or candidate id). False if it failed."""
+    owner = f"c{candidate}" if isinstance(candidate, int) else owner_of(candidate)
+    try:
+        status, _ = call_rag("DELETE", f"/v1/documents/{doc_id}", "user", owner)
+    except RagUnavailable:
+        return False
+    return status in (200, 404)
+
+
+def index_cv(cv) -> bool:
+    """Put (or put again, after an edit) one saved CV into its owner's knowledge base. Best effort."""
+    from agent.models import CVDocument  # pylint: disable=import-outside-toplevel
+
+    if not (cv.text or "").strip():
+        return False
+    if cv.kb_doc_id:
+        delete_doc(cv.candidate, cv.kb_doc_id)
+    try:
+        doc_id = upload_text(cv.candidate, cv.title, cv.text, cv.best_for, KIND_OF_CATEGORY[cv.is_cover_letter])
+    except KBError:
+        if cv.kb_doc_id:
+            CVDocument.objects.filter(pk=cv.pk).update(kb_doc_id="")
+        return False
+    CVDocument.objects.filter(pk=cv.pk).update(kb_doc_id=doc_id)  # update(): no save signal, no loop
+    cv.kb_doc_id = doc_id
+    return True
+
+
+def profile_facts(candidate) -> str:
+    """True facts from the profile that a CV header and cover letter need."""
+    return (
+        f"Name: {candidate.full_name}\nPhone: {candidate.phone}\nEmail: {candidate.email}\n"
+        f"Location: {candidate.location}\nAvailability: {candidate.availability}\n"
+        f"Extra true facts: {candidate.extra_notes}\n"
+        f"Answered questions:\n{candidate.answered_facts() or '(none)'}"
+    )[:6000]
+
+
+def tailor_documents(candidate, job) -> dict:
+    """CV, cover letter and email for this job, written from the person's own knowledge base. Raises KBError."""
+    if not candidate.ai_allowed:
+        raise KBError("AI is turned off for this account. Ask the admin to turn it on.")
+    body = {"job_title": (job.title or "Job")[:255], "company": (job.company or "")[:255],
+            "job_ad": (job.description or "")[:15000], "profile": profile_facts(candidate)}
+    try:
+        status, data = call_rag("POST", "/v1/tailor", "user", owner_of(candidate), json_body=body)
+    except RagUnavailable as exc:
+        raise KBError("The knowledge base service is not running right now. Please try again later.") from exc
+    if status != 200 or not isinstance(data, dict):
+        raise KBError(_message(status, data))
+    return {k: plain_text(data.get(k, "")) for k in ("cv", "cover_letter", "email")} | {
+        "sources": data.get("sources", [])}
+
+
+def prepare_application_from_kb(job, actor=None):
+    """Like agent.workflow.prepare_application, but the documents come from the knowledge base (DeepSeek)."""
+    from agent.models import Application, AuditLog  # pylint: disable=import-outside-toplevel
+
+    candidate = job.candidate
+    docs = tailor_documents(candidate, job)
+    app, _ = Application.objects.update_or_create(
+        job=job, defaults={"candidate": candidate, "cv_text": docs["cv"],
+                           "cover_letter": docs["cover_letter"], "email_draft": docs["email"]})
+    used = ", ".join(sorted({s.get("title", "") for s in docs["sources"] if isinstance(s, dict)}))
+    AuditLog.log("documents_generated_kb", f"{job} (from: {used or 'knowledge base'})"[:4000], actor=actor,
+                 candidate=candidate)
+    return app

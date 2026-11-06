@@ -123,10 +123,16 @@ class CVDocument(models.Model):
     category = models.CharField(max_length=120, blank=True, help_text="e.g. IT: Software, Hospitality")
     best_for = models.CharField(max_length=255, blank=True, help_text="Which jobs this CV is best for.")
     source_path = models.CharField(max_length=500, blank=True, help_text="Original file location (for your reference).")
+    kb_doc_id = models.CharField(max_length=64, blank=True, editable=False,
+                                 help_text="The same CV inside this person's knowledge base (kept in step automatically).")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["category", "title"]
+
+    @property
+    def is_cover_letter(self):
+        return self.category.lower().startswith("cover letter")
 
     def __str__(self):
         return f"{self.candidate} - {self.title}"

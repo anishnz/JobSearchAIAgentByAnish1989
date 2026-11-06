@@ -14,6 +14,22 @@ Each person uploads their own documents (CVs, job adverts, company notes, interv
 
 The AI is told to use only the uploaded text and never to invent employers, titles, dates or experience.
 
+## Many CVs and new CVs for each job (added 6 Nov 2026)
+
+- **Save all your CVs.** On *My documents*, choose **What is it? → My CV** (or *My cover letter*) and upload a
+  PDF, Word (.docx), TXT or MD file. Each person can save as many as they like (kitchen CV, cleaning CV, IT CV ...).
+- **One store.** A CV uploaded here is also saved in **My profile & CVs**, and a CV added or edited there is copied
+  into the knowledge base by itself. Deleting it in one place deletes it in both. The button **🔄 Add my saved CVs**
+  copies older CVs that are not in the knowledge base yet.
+- **Make a CV for a job.** On *My documents*, choose a saved job or paste a job advert, then press
+  **Make my CV + cover letter**. Or press **📚 Create from my knowledge base** on any job page.
+  The service finds the best parts of *your own* CVs for that job (never shared tips, never another user's CVs),
+  and DeepSeek writes a one-page NZ-style CV, a cover letter and an application email. If you saved a cover letter,
+  it matches its tone.
+- The result opens on the job page, where you can read and edit it, then download **CV (PDF / Word)** and
+  **Cover letter (PDF / Word)**. Replace any `[ADD: ...]` notes with true information before sending.
+- Nothing is sent to an employer automatically.
+
 ## Privacy: who sees what
 
 | | User | Admin |

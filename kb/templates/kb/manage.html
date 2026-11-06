@@ -7,6 +7,7 @@
      data-csrf="{{ csrf_token }}"
      data-documents-url="{% url 'kb:api_documents' c.pk %}"
      data-interview-url="{% url 'kb:api_interview' c.pk %}"
+     data-sync-url="{% url 'kb:api_sync_cvs' c.pk %}"
      data-is-admin="{% if is_admin %}1{% else %}0{% endif %}"
      {% if is_admin %}data-model-url="{% url 'kb:api_model' %}" data-model-test-url="{% url 'kb:api_model_test' %}"{% endif %}>
   <div class="top">
@@ -19,15 +20,51 @@
 
   <div id="kb-alert" aria-live="polite"></div>
 
+  <section class="card" aria-labelledby="kb-tailor-h">
+    <h2 id="kb-tailor-h">✍️ Make a CV for a job</h2>
+    <p class="small muted">The knowledge base picks the best parts of <b>your own</b> CVs for this job and writes a new
+      one-page CV, a cover letter and an email. Then you can download them as PDF or Word. It never adds experience
+      you do not have.</p>
+    <form method="post" action="{% url 'kb:tailor' c.pk %}">{% csrf_token %}
+      {% if jobs %}
+      <label for="kb-job">Choose a saved job</label>
+      <select id="kb-job" name="job_id">
+        <option value="">- or paste a new job advert below -</option>
+        {% for j in jobs %}<option value="{{ j.pk }}">{{ j.title }}{% if j.company %} - {{ j.company }}{% endif %}</option>{% endfor %}
+      </select>
+      {% endif %}
+      <div class="grid3">
+        <div><label for="kb-t-title">Job title</label><input id="kb-t-title" name="title" maxlength="255" placeholder="e.g. Kitchen Hand"></div>
+        <div><label for="kb-t-company">Company (optional)</label><input id="kb-t-company" name="company" maxlength="255"></div>
+        <div><label for="kb-t-url">Job link (optional)</label><input id="kb-t-url" name="url" type="url" maxlength="1000"></div>
+      </div>
+      <label for="kb-t-desc">Job advert</label>
+      <textarea id="kb-t-desc" name="description" rows="6" maxlength="15000" placeholder="Paste the whole job advert here"></textarea>
+      <div class="row" style="margin-top:12px">
+        <button class="big" type="submit" data-busy-text="Writing your CV... this can take up to a minute">Make my CV + cover letter</button>
+        <span class="muted small">{{ cv_count }} CV{{ cv_count|pluralize }} saved.</span>
+      </div>
+    </form>
+  </section>
+
   <section class="card" aria-labelledby="kb-upload-h">
     <h2 id="kb-upload-h">Upload a document</h2>
-    <p class="small muted">PDF, TXT or Markdown, up to 20 MB. Good examples: your CVs, job adverts, company information,
-      interview notes. Plain text and Markdown work best; a scanned PDF (picture of text) cannot be read.</p>
+    <p class="small muted">PDF, Word (.docx), TXT or Markdown, up to 20 MB. Save <b>all your CVs</b> here (for example a
+      kitchen CV, a cleaning CV and an IT CV), plus cover letters, job adverts and notes. CVs and cover letters are also
+      saved in "My profile &amp; CVs". A scanned PDF (picture of text) cannot be read.</p>
     <form id="kb-upload-form" novalidate>
       <div class="grid3">
         <div>
           <label for="kb-file">File</label>
-          <input id="kb-file" type="file" accept=".pdf,.txt,.md">
+          <input id="kb-file" type="file" accept=".pdf,.docx,.txt,.md">
+        </div>
+        <div>
+          <label for="kb-kind">What is it?</label>
+          <select id="kb-kind">
+            <option value="cv">My CV</option>
+            <option value="cover_letter">My cover letter</option>
+            <option value="other">Other (job advert, notes, company info)</option>
+          </select>
         </div>
         <div>
           <label for="kb-title">Title</label>
@@ -35,7 +72,7 @@
         </div>
         <div>
           <label for="kb-tags">Tags (optional)</label>
-          <input id="kb-tags" type="text" maxlength="120" placeholder="e.g. cv, kitchen, interview">
+          <input id="kb-tags" type="text" maxlength="120" placeholder="Best for, e.g. kitchen hand, dishwasher">
         </div>
       </div>
       {% if is_admin %}
@@ -49,10 +86,13 @@
   </section>
 
   <section class="card" aria-labelledby="kb-docs-h">
-    <h2 id="kb-docs-h">Documents</h2>
+    <div class="row" style="justify-content:space-between">
+      <h2 id="kb-docs-h" style="margin:0">Documents</h2>
+      <button id="kb-sync-btn" class="light" type="button" title="Copy CVs from My profile &amp; CVs that are not here yet">🔄 Add my saved CVs</button>
+    </div>
     <table>
-      <thead><tr><th>Title</th><th>Tags</th><th>Who sees it</th><th style="text-align:right">Chunks</th><th></th></tr></thead>
-      <tbody id="kb-docs-body"><tr><td colspan="5" class="muted">Loading...</td></tr></tbody>
+      <thead><tr><th>Title</th><th>Type</th><th>Tags</th><th>Who sees it</th><th style="text-align:right">Chunks</th><th></th></tr></thead>
+      <tbody id="kb-docs-body"><tr><td colspan="6" class="muted">Loading...</td></tr></tbody>
     </table>
   </section>
 

@@ -54,7 +54,10 @@ def _visible(owner: str) -> dict:
     return {"owner": {"$in": [owner, SHARED_OWNER]}}
 
 
-def add_document(owner: str, title: str, text: str, tags: str = "") -> tuple[str, int]:
+KINDS = {"cv", "cover_letter", "other"}
+
+
+def add_document(owner: str, title: str, text: str, tags: str = "", kind: str = "other") -> tuple[str, int]:
     chunks = chunk_text(text)
     if not chunks:
         raise ValueError("No readable text found in the document")
@@ -63,7 +66,8 @@ def add_document(owner: str, title: str, text: str, tags: str = "") -> tuple[str
         ids=[f"{doc_id}-{i}" for i in range(len(chunks))],
         documents=chunks,
         metadatas=[
-            {"doc_id": doc_id, "owner": owner, "title": title, "tags": tags, "chunk": i}
+            {"doc_id": doc_id, "owner": owner, "title": title, "tags": tags, "kind": kind if kind in KINDS else "other",
+             "chunk": i}
             for i in range(len(chunks))
         ],
     )
@@ -77,7 +81,7 @@ def list_documents(owner: str) -> list[dict]:
         d = docs.setdefault(
             m["doc_id"],
             {"doc_id": m["doc_id"], "title": m["title"], "tags": m["tags"], "chunks": 0,
-             "shared": m["owner"] == SHARED_OWNER},
+             "kind": m.get("kind", "other"), "shared": m["owner"] == SHARED_OWNER},
         )
         d["chunks"] += 1
     return sorted(docs.values(), key=lambda d: (not d["shared"], d["title"].lower()))
@@ -98,17 +102,22 @@ def delete_owner(owner: str) -> None:
         _col.delete(where={"owner": owner})
 
 
-def search(owner: str, query: str, k: int = 5) -> list[dict]:
-    visible = _col.get(where=_visible(owner), include=[])["ids"]
+def search(owner: str, query: str, k: int = 5, include_shared: bool = True, kinds: list[str] | None = None) -> list[dict]:
+    """Best matching chunks. include_shared=False: only this person's own documents (used for CV writing,
+    so shared tips are never treated as facts about the person). kinds: only these document kinds."""
+    where = _visible(owner) if include_shared else {"owner": owner}
+    if kinds:
+        where = {"$and": [where, {"kind": {"$in": kinds}}]}
+    visible = _col.get(where=where, include=[])["ids"]
     if not visible:
         return []
-    res = _col.query(query_texts=[query], n_results=min(k, len(visible)), where=_visible(owner))
+    res = _col.query(query_texts=[query], n_results=min(k, len(visible)), where=where)
     hits = []
     for text, meta, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0]):
         score = round(1 - dist, 3)
         if score >= MIN_SCORE:
             hits.append({"text": text, "title": meta["title"], "doc_id": meta["doc_id"], "score": score,
-                         "shared": meta["owner"] == SHARED_OWNER})
+                         "shared": meta["owner"] == SHARED_OWNER, "kind": meta.get("kind", "other")})
     return hits
 
 

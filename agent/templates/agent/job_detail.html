@@ -18,6 +18,7 @@
     <h2>What to do next</h2>
     <div class="row">
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="generate"><button class="big">✍️ {% if app.cv_text %}Re-create{% else %}Create{% endif %} my CV + cover letter</button></form>
+      <form method="post" action="{% url 'kb:tailor' c.pk %}">{% csrf_token %}<input type="hidden" name="job_id" value="{{ job.pk }}"><button class="big orange" title="Uses the CVs in your knowledge base (DeepSeek)">📚 Create from my knowledge base</button></form>
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="interview"><button class="light">🎤 Interview practice</button></form>
       {% if app and app.status != "applied" %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="applied"><button class="green">✅ I have applied</button></form>{% endif %}
     </div>

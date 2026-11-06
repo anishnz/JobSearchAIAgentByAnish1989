@@ -10,6 +10,8 @@ document.addEventListener("DOMContentLoaded", function () {
   var documentsUrl = root.dataset.documentsUrl;
   var interviewUrl = root.dataset.interviewUrl;
   var isAdmin = root.dataset.isAdmin === "1";
+  var syncUrl = root.dataset.syncUrl;
+  var KIND_NAMES = { cv: "CV", cover_letter: "Cover letter", other: "Other" };
   var alertBox = document.getElementById("kb-alert");
   var docsBody = document.getElementById("kb-docs-body");
 
@@ -19,7 +21,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function messageRow(text, cls) {
     var tr = el("tr");
     var td = el("td", cls, text);
-    td.colSpan = 5;
+    td.colSpan = 6;
     tr.appendChild(td);
     return tr;
   }
@@ -33,6 +35,9 @@ document.addEventListener("DOMContentLoaded", function () {
     docs.forEach(function (d) {
       var tr = el("tr");
       tr.appendChild(el("td", null, d.title));
+      var kind = el("td");
+      kind.appendChild(el("span", d.kind === "cv" ? "badge ok" : "badge", KIND_NAMES[d.kind] || "Other"));
+      tr.appendChild(kind);
       tr.appendChild(el("td", "muted", d.tags || ""));
       var who = el("td");
       who.appendChild(el("span", d.shared ? "badge blue" : "badge", d.shared ? "Everyone (shared)" : "Private"));
@@ -65,7 +70,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   async function removeDoc(d) {
-    var where = d.shared ? " from the SHARED knowledge base (all users)" : "";
+    var where = d.shared ? " from the SHARED knowledge base (all users)" :
+      (d.kind === "other" ? "" : " (it is also removed from My profile & CVs)");
     if (!window.confirm("Delete \"" + d.title + "\"" + where + "? This cannot be undone.")) { return; }
     try {
       await window.KB.call(documentsUrl + encodeURIComponent(d.doc_id) + "/", csrf, { method: "DELETE" });
@@ -96,12 +102,14 @@ document.addEventListener("DOMContentLoaded", function () {
     fd.append("title", document.getElementById("kb-title").value.trim());
     fd.append("tags", document.getElementById("kb-tags").value.trim());
     fd.append("shared", sharedBox && sharedBox.checked ? "1" : "0");
+    fd.append("kind", document.getElementById("kb-kind").value);
     upBtn.disabled = true;
     upBusy.hidden = false;
     try {
       // No Content-Type header: the browser adds the multipart boundary itself.
       var data = await window.KB.call(documentsUrl, csrf, { method: "POST", body: fd });
-      flash("success", "Uploaded. The document was split into " + data.chunks + " chunks.");
+      flash("success", "Uploaded. The document was split into " + data.chunks + " chunks." +
+        (data.saved_cv_id ? " It is also saved in My profile & CVs." : ""));
       upForm.reset();
       await loadDocs();
     } catch (err) {
@@ -110,6 +118,34 @@ document.addEventListener("DOMContentLoaded", function () {
       upBtn.disabled = false;
       upBusy.hidden = true;
     }
+  });
+
+  // ---- copy CVs from "My profile & CVs" ----
+  var syncBtn = document.getElementById("kb-sync-btn");
+  if (syncBtn && syncUrl) {
+    syncBtn.addEventListener("click", async function () {
+      if (syncBtn.disabled) { return; }
+      syncBtn.disabled = true;
+      flash("info", "Adding your saved CVs... the first time can take a minute.");
+      try {
+        var r = await window.KB.call(syncUrl, csrf, { method: "POST" });
+        flash(r.failed ? "warning" : "success", r.added ? ("Added " + r.added + " CV(s) to your knowledge base." +
+          (r.failed ? " " + r.failed + " could not be added; try again." : "")) : "All your saved CVs are already here.");
+        await loadDocs();
+      } catch (err) {
+        flash("error", err.message);
+      } finally {
+        syncBtn.disabled = false;
+      }
+    });
+  }
+
+  // ---- "Make a CV" form: show that it is working (it is a normal form post) ----
+  document.querySelectorAll("button[data-busy-text]").forEach(function (b) {
+    b.form.addEventListener("submit", function () {
+      b.disabled = true;
+      b.textContent = b.dataset.busyText;
+    });
   });
 
   // ---- interview practice ----

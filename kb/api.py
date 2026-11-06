@@ -25,11 +25,13 @@ import re
 from functools import wraps
 
 from django.core.cache import cache
+from django.core.files.base import ContentFile
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, JsonResponse
 from django.views.decorators.http import require_http_methods
 
-from agent.models import AuditLog
+from agent.models import AuditLog, CVDocument
+from agent.services import extract_text_from_upload
 from agent.views import get_candidate
 
 from . import services
@@ -37,7 +39,8 @@ from .services import RagUnavailable, call_rag, owner_of, role_of
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ASK_LIMIT_PER_HOUR = 60
-ALLOWED_EXTENSIONS = (".pdf", ".txt", ".md")
+ALLOWED_EXTENSIONS = (".pdf", ".docx", ".txt", ".md")
+KINDS = {"cv": "CV", "cover_letter": "Cover letter", "other": ""}
 DOC_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 MODEL_FIELDS = {
     "display_name": str,
@@ -126,6 +129,8 @@ def _content_ok(name: str, data: bytes) -> bool:
     """A PDF must really be a PDF; a text file must really be text (not a renamed program)."""
     if name.lower().endswith(".pdf"):
         return data.startswith(b"%PDF-")
+    if name.lower().endswith(".docx"):
+        return data.startswith(b"PK\x03\x04")  # a .docx file is a zip archive
     if b"\x00" in data:
         return False
     try:
@@ -226,31 +231,66 @@ def documents(request, cid):
     if upload is None:
         return error("Please choose a file to upload.", 400)
     if not upload.name.lower().endswith(ALLOWED_EXTENSIONS):
-        return error("Only PDF, TXT and Markdown (.md) files can be uploaded.", 400)
+        return error("Only PDF, Word (.docx), TXT and Markdown (.md) files can be uploaded.", 400)
     if upload.size > MAX_UPLOAD_BYTES:
         return error("That file is too large (20 MB maximum).", 413)
     shared = request.POST.get("shared") == "1"
     if shared and not request.user.is_staff:
         return error("Only the admin can share documents with everyone.", 403)
+    kind = request.POST.get("kind", "other")
+    if kind not in KINDS or shared:
+        kind = "other"  # shared tips are never anyone's CV
     content = upload.read()
     if not _content_ok(upload.name, content):
         AuditLog.log("upload_rejected", f"Knowledge base: {upload.name[:80]}", actor=request.user,
                      candidate=request.kb_candidate)
-        return error("This file's content does not match its type (PDF, TXT or Markdown).", 400)
-    title = request.POST.get("title", "").strip()[:120]
+        return error("This file's content does not match its type (PDF, Word, TXT or Markdown).", 400)
+    upload.seek(0)
+    try:
+        text = extract_text_from_upload(upload)
+    except Exception:  # broken PDF / Word file  # pylint: disable=broad-except
+        text = ""
+    if not text.strip():
+        return error("No readable text found in the document (a scanned PDF is a picture of text).", 400)
+    title = request.POST.get("title", "").strip()[:120] or upload.name.rsplit(".", 1)[0][:120]
     tags = request.POST.get("tags", "").strip()[:120]
     response = _forward(
         request,
         "POST",
         "/v1/documents",
-        files={"file": (upload.name, content, upload.content_type or "application/octet-stream")},
-        data={"title": title, "tags": tags, "shared": "1" if shared else "0"},
+        files={"file": (f"{title[:60]}.txt", text.encode("utf-8"), "text/plain")},
+        data={"title": title, "tags": tags, "shared": "1" if shared else "0", "kind": kind},
     )
-    if response.status_code == 200:
-        where = "shared knowledge base" if shared else "knowledge base"
-        AuditLog.log("kb_document_uploaded", f"{title or upload.name} ({where})", actor=request.user,
-                     candidate=None if shared else request.kb_candidate)
-    return response
+    if response.status_code != 200:
+        return response
+    data = json.loads(response.content)
+    if kind in ("cv", "cover_letter"):
+        # One store: the CV is also saved in "My profile & CVs", so job scoring and the normal CV writer use it too.
+        cv = CVDocument(candidate=request.kb_candidate, title=title, text=text, category=KINDS[kind],
+                        best_for=tags, kb_doc_id=data.get("doc_id", ""))
+        cv.uploaded_file.save(upload.name, ContentFile(content), save=False)
+        cv._kb_skip = True  # already in the knowledge base  # pylint: disable=protected-access
+        cv.save()
+        data["saved_cv_id"] = cv.pk
+    where = "shared knowledge base" if shared else "knowledge base"
+    AuditLog.log("kb_document_uploaded", f"{title} ({KINDS[kind] or 'document'}, {where})", actor=request.user,
+                 candidate=None if shared else request.kb_candidate)
+    return JsonResponse(data)
+
+
+@kb_api()
+@require_http_methods(["POST"])
+def sync_cvs(request, cid):
+    """Copy the CVs saved in 'My profile & CVs' that are not in the knowledge base yet."""
+    candidate = request.kb_candidate
+    missing = [cv for cv in candidate.cvs.all() if not cv.kb_doc_id and cv.text.strip()]
+    if missing and not services.is_running():
+        return error("The knowledge base service is not running right now. Please try again later.", 503)
+    added = sum(1 for cv in missing if services.index_cv(cv))
+    if added:
+        AuditLog.log("kb_cvs_synced", f"{added} CV(s) copied into the knowledge base", actor=request.user,
+                     candidate=candidate)
+    return JsonResponse({"added": added, "failed": len(missing) - added, "total": candidate.cvs.count()})
 
 
 @kb_api()
@@ -261,6 +301,10 @@ def document_delete(request, cid, doc_id):
         return error("That document id is not valid.", 400)
     response = _forward(request, "DELETE", f"/v1/documents/{doc_id}")
     if response.status_code == 200:
+        # One store: remove the same CV from "My profile & CVs" too.
+        for cv in CVDocument.objects.filter(candidate=request.kb_candidate, kb_doc_id=doc_id):
+            cv._kb_skip = True  # already gone from the knowledge base  # pylint: disable=protected-access
+            cv.delete()
         AuditLog.log("kb_document_deleted", doc_id, actor=request.user, candidate=request.kb_candidate)
     return response
 
