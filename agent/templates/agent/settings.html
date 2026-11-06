@@ -4,9 +4,12 @@
 <form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">
 <div class="grid">
   <div class="card">
-    <h2>🤖 AI (Claude)</h2>
-    <p>Status: {% if ai_on %}<span class="badge ok">AI on</span>{% elif not c.ai_allowed %}<span class="badge bad">Turned off by the admin</span>{% else %}<span class="badge warn">Free basic mode</span>{% endif %}
-       {% if has_ai_key %}<span class="badge blue">key saved</span>{% endif %}</p>
+    <h2>🤖 AI</h2>
+    <p>Status: {% if ai_on %}<span class="badge ok">On: {{ ai_mode }}</span>{% elif not c.ai_allowed %}<span class="badge bad">Turned off by the admin</span>{% else %}<span class="badge warn">Free basic mode</span>{% endif %}
+       {% if has_ai_key %}<span class="badge blue">Claude key saved</span>{% endif %}</p>
+    <label>{{ form.ai_provider.label }}</label>
+    {% for radio in form.ai_provider %}<label style="font-weight:500">{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}
+    <p class="small muted">Local AI is free and private: it runs in Ollama on this laptop{% if local_model %} (model: <b>{{ local_model }}</b>){% else %}. The admin has not chosen a local model yet{% endif %}. It is slower than Claude, and the laptop must be on with Ollama running.</p>
     {{ form.ai_key.label_tag }}{{ form.ai_key }}<span class="helptext">{{ form.ai_key.help_text }}</span>
     <label style="font-weight:500">{{ form.remove_ai_key }} {{ form.remove_ai_key.label }}</label>
     <p class="small muted">How to get a key: 1) open <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com → API Keys</a>, 2) click <i>Create key</i>, 3) add a little credit in <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener">Billing</a> (pay as you go, separate from a Claude.ai subscription), 4) paste the key here.</p>
@@ -27,7 +30,7 @@
 <p><button class="big">Save settings</button></p>
 </form>
 <div class="card"><h2>Test</h2><div class="row">
-  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test_ai"><button class="light">Test my Claude key</button></form>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test_ai"><button class="light">Test my AI</button></form>
   <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test_gmail"><button class="light">Send me a test email</button></form>
 </div></div>
 <div class="card"><h3>Your personal link</h3><p class="small">On this laptop: <span class="link">{{ links.laptop }}</span>{% if links.home %}<br>From other devices at home: <span class="link">{{ links.home }}</span>{% endif %}</p></div>

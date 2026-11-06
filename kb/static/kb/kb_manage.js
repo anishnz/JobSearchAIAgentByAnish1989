@@ -291,6 +291,71 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     loadModel();
+
+    // ---- quick choice: Ollama on this laptop or DeepSeek ----
+    var ollamaUrl = root.dataset.ollamaUrl;
+    var presetUrl = root.dataset.presetUrl;
+    var oStatus = document.getElementById("kb-ollama-status");
+    var oSelect = document.getElementById("kb-ollama-model");
+    var oUse = document.getElementById("kb-use-ollama");
+    var dsUse = document.getElementById("kb-use-deepseek");
+
+    async function loadOllama() {
+      try {
+        var o = await window.KB.call(ollamaUrl, csrf);
+        oSelect.replaceChildren();
+        if (!o.ok) {
+          oStatus.textContent = o.error + " Start the Ollama app, then reload this page.";
+          oSelect.appendChild(el("option", null, "Ollama not running"));
+          return;
+        }
+        if (!o.models.length) {
+          oStatus.textContent = "Ollama is running but has no models. In a terminal run for example: ollama pull llama3.2";
+          oSelect.appendChild(el("option", null, "No models installed"));
+          return;
+        }
+        o.models.forEach(function (m) {
+          var opt = el("option", null, m);
+          opt.value = m;
+          if (o.using_ollama && m === o.current_model) { opt.selected = true; }
+          oSelect.appendChild(opt);
+        });
+        oSelect.disabled = false;
+        oUse.disabled = false;
+        oStatus.textContent = "Ollama is running with " + o.models.length + " model(s). Now using: " +
+          (o.using_ollama ? o.current_model + " (local)" : "DeepSeek (cloud)") + ".";
+      } catch (err) {
+        oStatus.textContent = "Could not check Ollama. " + err.message;
+      }
+    }
+
+    async function usePreset(preset) {
+      setModelBusy(true);
+      oUse.disabled = true;
+      dsUse.disabled = true;
+      try {
+        var cfg = await window.KB.call(presetUrl, csrf, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preset: preset, model: preset === "ollama" ? oSelect.value : "" })
+        });
+        fillModel(cfg);
+        window.KB.showAlert(mAlert, "success", "Now using " + cfg.display_name + ". Press Test connection to check it.");
+        await loadOllama();
+      } catch (err) {
+        window.KB.showAlert(mAlert, "error", err.message);
+      } finally {
+        setModelBusy(false);
+        oUse.disabled = oSelect.disabled;
+        dsUse.disabled = false;
+      }
+    }
+
+    if (ollamaUrl && presetUrl && oSelect) {
+      oUse.addEventListener("click", function () { usePreset("ollama"); });
+      dsUse.addEventListener("click", function () { usePreset("deepseek"); });
+      loadOllama();
+    }
   }
 
   loadDocs();

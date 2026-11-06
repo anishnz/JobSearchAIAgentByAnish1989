@@ -54,6 +54,10 @@ MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.2"))
 # Loaded once into the SHARED part when the knowledge base is empty, so questions work straight away.
 SEED_FILE = Path(os.getenv("RAG_SEED_FILE", str(SERVICE_DIR / "job_search_knowledge_base_NZ.md")))
 
+# Ollama on the laptop (free local AI). Docker: docker-compose sets http://host.docker.internal:11434.
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
+
 ROLES = {"user", "admin"}
 SHARED_OWNER = "shared"
 

@@ -16,4 +16,6 @@ urlpatterns = [
     path("c/<int:cid>/kb/api/documents/<str:doc_id>/", api.document_delete, name="api_document_delete"),
     path("kb/api/admin/model/", api.model_settings, name="api_model"),
     path("kb/api/admin/model/test/", api.model_test, name="api_model_test"),
+    path("kb/api/admin/ollama/", api.ollama, name="api_ollama"),
+    path("kb/api/admin/model/preset/", api.model_preset, name="api_model_preset"),
 ]

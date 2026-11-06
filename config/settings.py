@@ -98,3 +98,7 @@ APP_PORT = os.getenv("APP_PORT", "8010")
 # No Docker: the service runs on this laptop (port 9010). Docker: docker-compose sets http://rag:9000.
 RAG_BASE_URL = os.getenv("RAG_BASE_URL", "http://127.0.0.1:9010")
 RAG_SERVICE_KEY = os.getenv("RAG_SERVICE_KEY", "")
+
+# Local AI: Ollama on this laptop (free, offline). Docker: docker-compose sets http://host.docker.internal:11434.
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))  # local models on a laptop can be slow

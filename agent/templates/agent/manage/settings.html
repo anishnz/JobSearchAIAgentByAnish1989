@@ -6,6 +6,28 @@
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">{{ form.as_p }}
     <p class="muted small">{% if s.gmail_app_password_enc %}An App Password is saved.{% endif %} How to get one: turn on <a href="https://myaccount.google.com/signinoptions/twosv" target="_blank" rel="noopener">2-Step Verification</a>, then create one at <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">App passwords</a>.</p>
     <button class="big">Save</button></form></div>
+  <div class="card"><h2>💻 Local AI (Ollama on this laptop)</h2>
+    <p>Status: {% if ollama_ok %}<span class="badge ok">Ollama running</span> <span class="small muted">{{ ollama_url }}</span>{% else %}<span class="badge bad">Not reachable</span>{% endif %}
+      {% if s.ollama_model %}<span class="badge blue">Chosen: {{ s.ollama_model }}</span>{% endif %}</p>
+    {% if ollama_ok %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="save_local_ai">
+      <label for="ollama_model">Model for the job agent</label>
+      <select id="ollama_model" name="ollama_model">
+        <option value="">- none (do not use local AI) -</option>
+        {% for m in ollama_models %}<option value="{{ m }}" {% if m == s.ollama_model %}selected{% endif %}>{{ m }}</option>{% endfor %}
+        {% if s.ollama_model and s.ollama_model not in ollama_models %}<option value="{{ s.ollama_model }}" selected>{{ s.ollama_model }} (not installed)</option>{% endif %}
+      </select>
+      <p class="small muted">These are the models installed in Ollama on this laptop. A bigger model writes better CVs but is slower.</p>
+      <button>Save model</button></form>
+    <div class="row" style="margin-top:10px">
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test_local_ai"><button class="light">Test local AI</button></form>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="local_for_all"><button class="light">Use local AI for all users ({{ local_users }}/{{ all_users }} now)</button></form>
+    </div>
+    {% else %}
+    <p class="small">{{ ollama_error }}</p>
+    <p class="small muted">Start the Ollama app on this laptop (it runs in the tray), then reload this page.</p>
+    {% endif %}
+  </div>
   <div class="card"><h2>Test</h2><p class="muted">Sends a test email to the system Gmail address.</p>
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test"><button class="light">Send test email</button></form>
     <h3 style="margin-top:20px">Advanced</h3><p class="small"><a href="/admin/">Django database admin</a> (for technical changes only)</p></div>

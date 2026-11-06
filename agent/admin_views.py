@@ -116,6 +116,28 @@ def manage_settings(request):
         AuditLog.log("system_settings_saved", "", actor=request.user)
         messages.success(request, "System settings saved.")
         return redirect("manage_settings")
+    if request.method == "POST" and action == "save_local_ai":
+        model = request.POST.get("ollama_model", "").strip()[:120]
+        s.ollama_model = model
+        s.save(update_fields=["ollama_model"])
+        AuditLog.log("local_ai_model_set", model or "(none)", actor=request.user)
+        messages.success(request, f"Local AI model set to {model}." if model else "Local AI model removed.")
+        return redirect("manage_settings")
+    if request.method == "POST" and action == "test_local_ai":
+        if not s.ollama_model:
+            messages.error(request, "Choose a local AI model first.")
+        else:
+            ok, msg = services.test_ai_key(services.LOCAL_PREFIX + s.ollama_model)
+            (messages.success if ok else messages.error)(request, msg)
+        return redirect("manage_settings")
+    if request.method == "POST" and action == "local_for_all":
+        if not s.ollama_model:
+            messages.error(request, "Choose a local AI model first.")
+        else:
+            n = Candidate.objects.exclude(ai_provider="local").update(ai_provider="local")
+            AuditLog.log("local_ai_for_all", f"{n} user(s) switched to local AI", actor=request.user)
+            messages.success(request, f"{n} user(s) now use the local AI. Each user can change it in their Settings.")
+        return redirect("manage_settings")
     if request.method == "POST" and action == "test":
         if not s.email_ready:
             messages.error(request, "Save the Gmail address and App Password first.")
@@ -123,7 +145,12 @@ def manage_settings(request):
             ok, msg = services.test_gmail(s.gmail_address, s.gmail_app_password)
             (messages.success if ok else messages.error)(request, msg)
         return redirect("manage_settings")
-    return render(request, "agent/manage/settings.html", {"form": form, "s": s, "active": "manage_settings"})
+    ollama_ok, ollama_models = services.list_ollama_models()
+    return render(request, "agent/manage/settings.html", {
+        "form": form, "s": s, "active": "manage_settings", "ollama_ok": ollama_ok,
+        "ollama_models": ollama_models if ollama_ok else [], "ollama_error": "" if ollama_ok else ollama_models,
+        "ollama_url": services.ollama_url(),
+        "local_users": Candidate.objects.filter(ai_provider="local").count(), "all_users": Candidate.objects.count()})
 
 
 def _check(name, ok, detail):
@@ -164,6 +191,12 @@ def manage_health(request):
                          s.gmail_address or "Not set up - Admin > System settings"))
     with_key = sum(1 for c in Candidate.objects.all() if c.ai_key_enc and c.ai_allowed)
     checks.append(_check("AI keys", True, f"{with_key} user(s) have their own Claude key; others use free basic mode"))
+    # Local AI (Ollama)
+    o_ok, o_models = services.list_ollama_models()
+    checks.append(_check("Local AI (Ollama)", o_ok and bool(s.ollama_model) and s.ollama_model in o_models,
+                         (f"Running, {len(o_models)} model(s). Chosen: {s.ollama_model or 'none - System settings'}"
+                          + ("" if not s.ollama_model or s.ollama_model in o_models else " (NOT installed)"))
+                         if o_ok else o_models))
     # Knowledge base (RAG) service
     from kb.services import is_running as kb_running  # pylint: disable=import-outside-toplevel
     kb_ok = kb_running()

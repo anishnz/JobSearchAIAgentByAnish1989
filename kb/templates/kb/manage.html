@@ -9,7 +9,8 @@
      data-interview-url="{% url 'kb:api_interview' c.pk %}"
      data-sync-url="{% url 'kb:api_sync_cvs' c.pk %}"
      data-is-admin="{% if is_admin %}1{% else %}0{% endif %}"
-     {% if is_admin %}data-model-url="{% url 'kb:api_model' %}" data-model-test-url="{% url 'kb:api_model_test' %}"{% endif %}>
+     {% if is_admin %}data-model-url="{% url 'kb:api_model' %}" data-model-test-url="{% url 'kb:api_model_test' %}"
+     data-ollama-url="{% url 'kb:api_ollama' %}" data-preset-url="{% url 'kb:api_model_preset' %}"{% endif %}>
   <div class="top">
     <div>
       <h1>📁 Knowledge base documents</h1>
@@ -125,6 +126,21 @@
     <p class="small muted">These settings belong to the Knowledge Base service (saved in data/rag/model_config.json).
       Leave the API key empty to keep the current key.</p>
     <div id="kb-model-alert" aria-live="polite"></div>
+    <div class="card" style="background:#f8fafc;box-shadow:none">
+      <h3>Quick choice</h3>
+      <p class="small muted" id="kb-ollama-status">Checking Ollama on this laptop...</p>
+      <div class="grid3">
+        <div>
+          <label for="kb-ollama-model">💻 Ollama on this laptop (free, private)</label>
+          <select id="kb-ollama-model" disabled><option value="">Loading models...</option></select>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
+          <button id="kb-use-ollama" type="button" disabled>Use this local model</button>
+          <button id="kb-use-deepseek" class="light" type="button">☁️ Use DeepSeek (cloud)</button>
+        </div>
+      </div>
+    </div>
+    <h3>Advanced</h3>
     <form id="kb-model-form" novalidate>
       <div class="grid3">
         <div><label for="kb-m-name">Display name</label><input id="kb-m-name" type="text" maxlength="80"></div>

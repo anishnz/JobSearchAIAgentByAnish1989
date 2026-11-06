@@ -19,6 +19,9 @@ applications and AI questions are never mixed with another person's.
 - **Knowledge base (RAG)** - each person uploads their own documents (CVs, job adverts, notes), asks questions
   with sources, and gets interview practice questions. Private per user; the admin can add shared tips.
   Taken from CyberQuest. Details: [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md).
+- **Local AI (free)** - use a model installed in Ollama on this laptop for CV reading, job scores, CV and cover
+  letter writing, interview practice and knowledge base answers. Simple guide:
+  [docs/HOW_TO_USE_KNOWLEDGE_BASE_AND_LOCAL_AI.md](docs/HOW_TO_USE_KNOWLEDGE_BASE_AND_LOCAL_AI.md).
 - **Auto mode (off by default)** - only the person themselves can turn it on. It prepares applications automatically
   for strong matches; the final submission is always done by the person on the employer's website.
 

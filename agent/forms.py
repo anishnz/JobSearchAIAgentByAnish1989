@@ -121,6 +121,8 @@ class CandidateProfileForm(forms.ModelForm):
 
 
 class UserSettingsForm(forms.Form):
+    ai_provider = forms.ChoiceField(choices=Candidate.AI_PROVIDERS, widget=forms.RadioSelect, label="Which AI should help me?",
+                                    required=False)
     gmail_address = forms.EmailField(required=False, label="Your Gmail address")
     gmail_app_password = forms.CharField(required=False, widget=forms.PasswordInput, label="Gmail App Password",
                                          help_text="Leave empty to keep the saved one.")

@@ -338,3 +338,27 @@ def model_settings(request):
 def model_test(request):
     """Admin: check that the AI model answers."""
     return _forward(request, "POST", "/v1/admin/model/test")
+
+
+@kb_api(admin_only=True)
+@require_http_methods(["GET"])
+def ollama(request):
+    """Admin: is Ollama running on this laptop, and which models are installed?"""
+    return _forward(request, "GET", "/v1/admin/ollama")
+
+
+@kb_api(admin_only=True)
+@require_http_methods(["POST"])
+def model_preset(request):
+    """Admin: quick switch the knowledge base AI to Ollama (a chosen local model) or back to DeepSeek."""
+    body = _json_body(request)
+    if body is None or body.get("preset") not in ("ollama", "deepseek"):
+        return error("Please choose Ollama or DeepSeek.", 400)
+    model = body.get("model", "")
+    model = model.strip()[:120] if isinstance(model, str) else ""
+    if body["preset"] == "ollama" and not model:
+        return error("Please choose an installed model.", 400)
+    response = _forward(request, "POST", "/v1/admin/model/preset", {"preset": body["preset"], "model": model})
+    if response.status_code == 200:
+        AuditLog.log("kb_model_preset", f"{body['preset']} {model}".strip(), actor=request.user)
+    return response

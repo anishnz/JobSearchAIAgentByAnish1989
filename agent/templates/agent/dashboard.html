@@ -7,7 +7,7 @@
     <form method="post">{% csrf_token %}{% if c.search_paused %}<input type="hidden" name="action" value="resume"><button class="big green">▶ Resume daily search</button>{% else %}<input type="hidden" name="action" value="pause"><button class="big light">⏸ Pause daily search</button>{% endif %}</form>
   </div>
 </div>
-{% if not ai_on %}<div class="msg warning">AI is off for you - free basic matching is used. To use AI, add your own Claude key in <a href="{% url 'candidate_settings' c.pk %}">Settings</a>.</div>{% endif %}
+{% if not ai_on %}<div class="msg warning">AI is off for you - free basic matching is used. To use AI, choose the free Local AI or add your own Claude key in <a href="{% url 'candidate_settings' c.pk %}">Settings</a>.</div>{% endif %}
 <div class="stats">
   <div class="stat blue"><b>{{ stats.jobs_today }}</b><span>Jobs found today</span></div>
   <div class="stat green"><b>{{ stats.suggested_today }}</b><span>Good matches today</span></div>

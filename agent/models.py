@@ -52,6 +52,9 @@ class Candidate(models.Model):
     gmail_address = models.EmailField(blank=True)
     gmail_app_password_enc = models.TextField(blank=True)
     ai_key_enc = models.TextField(blank=True)
+    AI_PROVIDERS = [("claude", "Claude (my own API key)"), ("local", "Local AI on this laptop (Ollama, free)")]
+    ai_provider = models.CharField(max_length=10, choices=AI_PROVIDERS, default="claude",
+                                   help_text="Which AI writes your CVs, scores jobs and makes interview practice.")
 
     last_insight = models.TextField(blank=True)
     last_insight_at = models.DateTimeField(null=True, blank=True)
@@ -226,6 +229,8 @@ class SystemSettings(models.Model):
     """One row of system-wide settings, edited by the super admin."""
 
     site_title = models.CharField(max_length=120, default="Job Search AI Agent")
+    ollama_model = models.CharField(max_length=120, blank=True,
+                                    help_text="Local AI model in Ollama on this laptop, e.g. llama3.2 (chosen by the admin).")
     gmail_address = models.EmailField(blank=True, help_text="Sends 'forgot password' emails.")
     gmail_app_password_enc = models.TextField(blank=True)
     scheduler_heartbeat = models.DateTimeField(null=True, blank=True)

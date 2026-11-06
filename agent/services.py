@@ -256,10 +256,56 @@ def search_job_sites(keyword, per_site=10):
 
 
 # ---------------------------------------------------------------- Claude (per user key)
+LOCAL_PREFIX = "local-ollama:"  # candidate_key() returns this + model name when the local AI is chosen
+_THINK = re.compile(r"<think>.*?</think>", re.S)
+
+
+def ollama_url():
+    return settings.OLLAMA_BASE_URL.rstrip("/")
+
+
+def list_ollama_models():
+    """Return (ok, models or error text) from Ollama on this laptop."""
+    try:
+        r = requests.get(f"{ollama_url()}/api/tags", timeout=5)
+        r.raise_for_status()
+        names = sorted(m.get("name", "") for m in r.json().get("models", []) if m.get("name"))
+        return True, names
+    except (requests.RequestException, ValueError) as exc:
+        return False, f"Ollama is not reachable at {ollama_url()} ({exc.__class__.__name__}). Is the Ollama app running?"
+
+
+def ask_ollama(prompt, model, max_tokens=2500, system=None):
+    """Ask the local Ollama model. Same rules (AI_RULES) as Claude."""
+    r = requests.post(f"{ollama_url()}/api/chat", timeout=(5, settings.OLLAMA_TIMEOUT), json={
+        "model": model, "stream": False,
+        "messages": [{"role": "system", "content": system or AI_RULES}, {"role": "user", "content": prompt}],
+        "options": {"temperature": 0.3, "num_predict": max_tokens},
+    })
+    if r.status_code == 404:
+        raise RuntimeError(f"Ollama model '{model}' is not installed (run: ollama pull {model})")
+    r.raise_for_status()
+    return _THINK.sub("", r.json().get("message", {}).get("content", "")).strip()
+
+
+def ai_mode(candidate):
+    """Short label for pages: 'Claude', 'Local AI (llama3.2)' or '' (free basic mode)."""
+    key = candidate_key(candidate)
+    if not key:
+        return ""
+    return f"Local AI ({key[len(LOCAL_PREFIX):]})" if key.startswith(LOCAL_PREFIX) else "Claude"
+
+
 def candidate_key(candidate):
-    """Return the Claude key this candidate may use ('' = basic mode)."""
+    """Return the AI 'key' this candidate may use ('' = basic mode).
+    For the local AI it is LOCAL_PREFIX + the Ollama model chosen by the admin."""
     if candidate is None or not candidate.ai_allowed:
         return ""
+    if getattr(candidate, "ai_provider", "claude") == "local":
+        from .models import SystemSettings  # pylint: disable=import-outside-toplevel
+
+        model = SystemSettings.load().ollama_model
+        return f"{LOCAL_PREFIX}{model}" if model else ""
     key = candidate.ai_key
     if not key and candidate.user.is_superuser:
         key = settings.ANTHROPIC_API_KEY  # admin may also keep a key in .env
@@ -271,6 +317,9 @@ def claude_available(candidate=None):
 
 
 def ask_claude(prompt, api_key, max_tokens=2500):
+    """Ask the chosen AI: Claude, or the local Ollama model when api_key is LOCAL_PREFIX + model."""
+    if api_key.startswith(LOCAL_PREFIX):
+        return ask_ollama(prompt, api_key[len(LOCAL_PREFIX):], max_tokens)
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
@@ -285,6 +334,12 @@ def ask_claude(prompt, api_key, max_tokens=2500):
 
 def _ai_error_text(exc):
     msg = str(exc).lower()
+    if isinstance(exc, requests.ConnectionError):
+        return "Local AI (Ollama) is not running on this laptop"
+    if isinstance(exc, requests.Timeout):
+        return "Local AI (Ollama) took too long"
+    if "ollama model" in msg:
+        return str(exc)
     if "credit balance" in msg:
         return "Claude API has no credit"
     if "authentication" in msg or "x-api-key" in msg or "invalid api key" in msg:
@@ -307,7 +362,9 @@ def with_fallback(candidate, ai_fn, basic_fn):
 def test_ai_key(api_key):
     """Return (ok, message) for the settings page."""
     try:
-        ask_claude("Reply with the word OK.", api_key, max_tokens=5)
+        reply = ask_claude("Reply with the word OK.", api_key, max_tokens=20)
+        if api_key.startswith(LOCAL_PREFIX):
+            return True, f"Local AI works. {api_key[len(LOCAL_PREFIX):]} replied: {reply[:60]}"
         return True, "Claude key works."
     except Exception as exc:
         return False, _ai_error_text(exc)

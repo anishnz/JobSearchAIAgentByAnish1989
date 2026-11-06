@@ -229,10 +229,12 @@ def candidate_settings(request, cid):
     candidate = get_candidate(request, cid)
     if candidate.user_id != request.user.id and not request.user.is_superuser:
         raise PermissionDenied
-    form = UserSettingsForm(request.POST or None, initial={"gmail_address": candidate.gmail_address})
+    form = UserSettingsForm(request.POST or None, initial={"gmail_address": candidate.gmail_address,
+                                                           "ai_provider": candidate.ai_provider})
     action = request.POST.get("action")
     if request.method == "POST" and action == "save" and form.is_valid():
         d = form.cleaned_data
+        candidate.ai_provider = d["ai_provider"] or candidate.ai_provider
         candidate.gmail_address = d["gmail_address"]
         if d["remove_gmail"]:
             candidate.gmail_app_password = ""
@@ -249,7 +251,8 @@ def candidate_settings(request, cid):
     if request.method == "POST" and action == "test_ai":
         key = services.candidate_key(candidate)
         if not key:
-            messages.error(request, "No Claude key saved (or AI is turned off by the admin).")
+            messages.error(request, "AI is not ready: save a Claude key, or ask the admin to choose a local AI model "
+                                    "(or AI is turned off by the admin).")
         else:
             ok, msg = services.test_ai_key(key)
             (messages.success if ok else messages.error)(request, msg)
@@ -264,6 +267,7 @@ def candidate_settings(request, cid):
     return render(request, "agent/settings.html", {
         "c": candidate, "form": form, "has_ai_key": bool(candidate.ai_key_enc),
         "has_gmail_pw": bool(candidate.gmail_app_password_enc), "ai_on": services.claude_available(candidate),
+        "ai_mode": services.ai_mode(candidate), "local_model": SystemSettings.load().ollama_model,
         "links": personal_links(request, candidate), "active": "settings"})
 
 
