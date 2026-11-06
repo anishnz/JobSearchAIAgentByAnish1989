@@ -1,0 +1,114 @@
+{% extends "agent/base.html" %}
+{% load static %}
+{% block title %}My documents{% endblock %}
+
+{% block content %}
+<div id="kb-app"
+     data-csrf="{{ csrf_token }}"
+     data-documents-url="{% url 'kb:api_documents' c.pk %}"
+     data-interview-url="{% url 'kb:api_interview' c.pk %}"
+     data-is-admin="{% if is_admin %}1{% else %}0{% endif %}"
+     {% if is_admin %}data-model-url="{% url 'kb:api_model' %}" data-model-test-url="{% url 'kb:api_model_test' %}"{% endif %}>
+  <div class="top">
+    <div>
+      <h1>📁 Knowledge base documents</h1>
+      <p>Your private documents: only you{% if not is_admin %} and the admin{% endif %} can see them. Shared tips are visible to everyone.</p>
+    </div>
+    <a class="btn light" href="{% url 'kb:ask' c.pk %}">💬 Ask a question</a>
+  </div>
+
+  <div id="kb-alert" aria-live="polite"></div>
+
+  <section class="card" aria-labelledby="kb-upload-h">
+    <h2 id="kb-upload-h">Upload a document</h2>
+    <p class="small muted">PDF, TXT or Markdown, up to 20 MB. Good examples: your CVs, job adverts, company information,
+      interview notes. Plain text and Markdown work best; a scanned PDF (picture of text) cannot be read.</p>
+    <form id="kb-upload-form" novalidate>
+      <div class="grid3">
+        <div>
+          <label for="kb-file">File</label>
+          <input id="kb-file" type="file" accept=".pdf,.txt,.md">
+        </div>
+        <div>
+          <label for="kb-title">Title</label>
+          <input id="kb-title" type="text" maxlength="120" placeholder="Shown as the source of answers">
+        </div>
+        <div>
+          <label for="kb-tags">Tags (optional)</label>
+          <input id="kb-tags" type="text" maxlength="120" placeholder="e.g. cv, kitchen, interview">
+        </div>
+      </div>
+      {% if is_admin %}
+      <label style="font-weight:400"><input id="kb-shared" type="checkbox"> Share with all users (admin)</label>
+      {% endif %}
+      <div class="row" style="margin-top:12px">
+        <button id="kb-upload-btn" type="submit">Upload</button>
+        <span id="kb-upload-busy" class="muted small" role="status" hidden>Reading and indexing...</span>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="kb-docs-h">
+    <h2 id="kb-docs-h">Documents</h2>
+    <table>
+      <thead><tr><th>Title</th><th>Tags</th><th>Who sees it</th><th style="text-align:right">Chunks</th><th></th></tr></thead>
+      <tbody id="kb-docs-body"><tr><td colspan="5" class="muted">Loading...</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="card" aria-labelledby="kb-int-h">
+    <h2 id="kb-int-h">Interview practice</h2>
+    <p class="small muted">Likely interview questions with honest answer tips, written from your documents.
+      Read them and answer in your own words.</p>
+    <form id="kb-int-form" novalidate>
+      <div class="grid3">
+        <div>
+          <label for="kb-topic">Job or topic</label>
+          <input id="kb-topic" type="text" maxlength="300" placeholder="For example: kitchen hand at a busy cafe">
+        </div>
+        <div>
+          <label for="kb-count">Questions</label>
+          <input id="kb-count" type="number" min="1" max="15" value="5">
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="kb-int-btn" type="submit">Make questions</button>
+        <span id="kb-int-busy" class="muted small" role="status" hidden>Writing questions... this can take up to a minute.</span>
+      </div>
+    </form>
+    <div id="kb-int-out" style="margin-top:14px" aria-live="polite"></div>
+  </section>
+
+  {% if is_admin %}
+  <section class="card" aria-labelledby="kb-model-h">
+    <h2 id="kb-model-h">AI model settings <span class="badge blue">Admin</span></h2>
+    <p class="small muted">These settings belong to the Knowledge Base service (saved in data/rag/model_config.json).
+      Leave the API key empty to keep the current key.</p>
+    <div id="kb-model-alert" aria-live="polite"></div>
+    <form id="kb-model-form" novalidate>
+      <div class="grid3">
+        <div><label for="kb-m-name">Display name</label><input id="kb-m-name" type="text" maxlength="80"></div>
+        <div><label for="kb-m-url">API base URL</label><input id="kb-m-url" type="text" maxlength="200"></div>
+        <div><label for="kb-m-id">Model ID</label><input id="kb-m-id" type="text" maxlength="120"></div>
+        <div><label for="kb-m-key">API key</label>
+          <input id="kb-m-key" type="password" maxlength="200" autocomplete="new-password">
+          <span class="helptext">Current key: <span id="kb-m-key-mask">...</span></span></div>
+        <div><label for="kb-m-temp">Temperature</label><input id="kb-m-temp" type="number" min="0" max="2" step="0.1"></div>
+        <div><label for="kb-m-tokens">Max tokens</label><input id="kb-m-tokens" type="number" min="1" step="1"></div>
+        <div><label for="kb-m-timeout">Timeout (seconds)</label><input id="kb-m-timeout" type="number" min="1" step="1"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="kb-model-save" type="submit">Save settings</button>
+        <button id="kb-model-test" class="light" type="button">Test connection</button>
+        <span id="kb-model-busy" class="muted small" role="status" hidden>Working...</span>
+      </div>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'kb/kb_common.js' %}"></script>
+<script src="{% static 'kb/kb_manage.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "agent/base.html" %}
+{% load static %}
+{% block title %}Knowledge base{% endblock %}
+
+{% block content %}
+<div id="kb-app" data-csrf="{{ csrf_token }}" data-ask-url="{% url 'kb:api_ask' c.pk %}">
+  <div class="top">
+    <div>
+      <h1>📚 Knowledge base</h1>
+      <p>Ask about your own documents (CVs, job adverts, company notes) and the shared job-search tips.</p>
+    </div>
+    <a class="btn light" href="{% url 'kb:manage' c.pk %}">📁 My documents &amp; interview practice</a>
+  </div>
+
+  <form id="kb-ask-form" class="card" novalidate>
+    <label for="kb-question" style="margin-top:0">Your question</label>
+    <textarea id="kb-question" rows="3" maxlength="1000"
+              placeholder="For example: What should I write in a cover letter for a kitchen hand job?"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button id="kb-ask-btn" type="submit">Ask</button>
+      <span id="kb-busy" class="muted small" role="status" hidden>Thinking...</span>
+    </div>
+  </form>
+
+  <div id="kb-result" aria-live="polite"></div>
+
+  <p class="small muted">
+    Answers are written by an AI from the documents in your knowledge base and can contain mistakes.
+    Check important details (pay, visa rules) on official websites. Only you and the admin can see your documents.
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'kb/kb_common.js' %}"></script>
+<script src="{% static 'kb/kb_ask.js' %}"></script>
+{% endblock %}

@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "agent",
+    "kb",  # knowledge base (taken from CyberQuest)
 ]
 
 MIDDLEWARE = [
@@ -92,3 +93,8 @@ DAILY_SEARCH_MINUTE = int(os.getenv("DAILY_SEARCH_MINUTE", "0"))
 # Shown on personal links (set by start.bat)
 HOST_LAN_IP = os.getenv("HOST_LAN_IP", "")
 APP_PORT = os.getenv("APP_PORT", "8010")
+
+# Knowledge base (RAG) service - see docs/KNOWLEDGE_BASE.md
+# No Docker: the service runs on this laptop (port 9010). Docker: docker-compose sets http://rag:9000.
+RAG_BASE_URL = os.getenv("RAG_BASE_URL", "http://127.0.0.1:9010")
+RAG_SERVICE_KEY = os.getenv("RAG_SERVICE_KEY", "")

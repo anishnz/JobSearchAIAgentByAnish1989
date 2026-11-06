@@ -48,6 +48,7 @@ if exist ".env" goto env_ok
 echo First run: creating your settings file (.env)...
 copy ".env.example" ".env" >nul
 powershell -NoProfile -Command "$k=[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N'); (Get-Content '.env') -replace 'change-me-to-a-long-random-string',$k | Set-Content '.env'"
+powershell -NoProfile -Command "$k=[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N'); (Get-Content '.env') -replace 'change-me-rag-key',$k | Set-Content '.env'"
 echo (Your Claude key is optional. Each person can add their own later in Settings.)
 :env_ok
 
@@ -111,6 +112,7 @@ echo   Running (Docker) at http://localhost:%APP_PORT%
 echo   Personal links on this laptop: http://NAMEcv.localhost:%APP_PORT%
 if defined HOST_LAN_IP echo   From phones/laptops at home: http://%HOST_LAN_IP%:%APP_PORT%
 echo   Daily job search: 8:00 AM Auckland time
+echo   Knowledge base: starts with the app (first build downloads AI packages, 10-20 minutes)
 echo   Pause daily search: docker-pause.bat    Stop everything: docker-stop.bat
 echo ============================================
 echo.

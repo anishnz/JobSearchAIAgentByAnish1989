@@ -164,6 +164,12 @@ def manage_health(request):
                          s.gmail_address or "Not set up - Admin > System settings"))
     with_key = sum(1 for c in Candidate.objects.all() if c.ai_key_enc and c.ai_allowed)
     checks.append(_check("AI keys", True, f"{with_key} user(s) have their own Claude key; others use free basic mode"))
+    # Knowledge base (RAG) service
+    from kb.services import is_running as kb_running  # pylint: disable=import-outside-toplevel
+    kb_ok = kb_running()
+    checks.append(_check("Knowledge base service", kb_ok,
+                         f"Running at {settings.RAG_BASE_URL}" if kb_ok else
+                         "Not running - start.bat starts it (first start can take 10-20 minutes)"))
     # Job websites (on request, takes a few seconds)
     sites = []
     if request.method == "POST" and request.POST.get("action") == "sites":

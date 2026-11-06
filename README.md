@@ -16,6 +16,9 @@ applications and AI questions are never mixed with another person's.
 - **Interview preparation** - likely questions, sample answers from the person's real background, and YouTube search links.
 - **Dashboard** - jobs found today, AI suggested, applied today/total, interviews, follow-ups due, AI daily summary.
 - **Application records** - status, applied date, follow-up reminder (7 days), interview date, notes.
+- **Knowledge base (RAG)** - each person uploads their own documents (CVs, job adverts, notes), asks questions
+  with sources, and gets interview practice questions. Private per user; the admin can add shared tips.
+  Taken from CyberQuest. Details: [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md).
 - **Auto mode (off by default)** - only the person themselves can turn it on. It prepares applications automatically
   for strong matches; the final submission is always done by the person on the employer's website.
 

@@ -51,10 +51,25 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM ---- 2b. Knowledge base service (from CyberQuest): its own Python folder, first time about 1 GB
+set KB_OK=1
+if exist "knowledgebase-rag\.venv\Scripts\python.exe" goto kb_venv_ok
+echo Setting up the Knowledge base service (first time only, 10-20 minutes)...
+%PY% -m venv "knowledgebase-rag\.venv"
+if errorlevel 1 set KB_OK=
+if not defined KB_OK goto kb_done
+"knowledgebase-rag\.venv\Scripts\python.exe" -m pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+:kb_venv_ok
+"knowledgebase-rag\.venv\Scripts\python.exe" -m pip install -q -r "knowledgebase-rag\requirements.txt"
+if errorlevel 1 set KB_OK=
+:kb_done
+if not defined KB_OK echo Knowledge base setup failed. The website still works without it; run this file again later.
+
 REM ---- 3. First run: create .env
 if exist ".env" goto env_ok
 copy ".env.example" ".env" >nul
 powershell -NoProfile -Command "$k=[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N'); (Get-Content '.env') -replace 'change-me-to-a-long-random-string',$k | Set-Content '.env'"
+powershell -NoProfile -Command "$k=[guid]::NewGuid().ToString('N')+[guid]::NewGuid().ToString('N'); (Get-Content '.env') -replace 'change-me-rag-key',$k | Set-Content '.env'"
 :env_ok
 
 REM ---- 4. Port check FIRST (skip if our own window is already running)
@@ -95,6 +110,10 @@ tasklist /fi "WINDOWTITLE eq JobSearchAI-web*" 2>nul | findstr /i "cmd.exe" >nul
 if errorlevel 1 start "JobSearchAI-web" /min cmd /c ".venv\Scripts\python.exe -m waitress --listen=0.0.0.0:%APP_PORT% config.wsgi:application"
 tasklist /fi "WINDOWTITLE eq JobSearchAI-scheduler*" 2>nul | findstr /i "cmd.exe" >nul
 if errorlevel 1 start "JobSearchAI-scheduler" /min cmd /c ".venv\Scripts\python.exe manage.py run_scheduler"
+if not defined KB_OK goto kb_started
+tasklist /fi "WINDOWTITLE eq JobSearchAI-kb*" 2>nul | findstr /i "cmd.exe" >nul
+if errorlevel 1 start "JobSearchAI-kb" /min cmd /c "cd /d knowledgebase-rag && .venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 9010"
+:kb_started
 
 echo Waiting for the website...
 for /l %%i in (1,1,30) do (
@@ -122,6 +141,7 @@ echo   Running (no Docker) at http://localhost:%APP_PORT%
 echo   Personal links on this laptop: http://NAMEcv.localhost:%APP_PORT%
 if defined HOST_LAN_IP echo   From phones/laptops at home: http://%HOST_LAN_IP%:%APP_PORT%
 echo   Daily job search: 8:00 AM Auckland time (while this laptop is on)
+if defined KB_OK echo   Knowledge base service: http://127.0.0.1:9010/health (first start loads the search model, wait a minute)
 echo   Pause daily search: nodocker-pause.bat    Stop everything: nodocker-stop.bat
 echo ============================================
 echo.

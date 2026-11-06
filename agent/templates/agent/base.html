@@ -74,6 +74,7 @@ pre{white-space:pre-wrap;font-family:inherit;background:#f8fafc;border:1px solid
       <a class="nav {% if active == 'week' %}on{% endif %}" href="{% url 'week' nav_c.pk %}">📅 This week</a>
       <a class="nav {% if active == 'applications' %}on{% endif %}" href="{% url 'applications' nav_c.pk %}">📋 My applications</a>
       <a class="nav {% if active == 'questions' %}on{% endif %}" href="{% url 'questions' nav_c.pk %}">💬 AI questions</a>
+      <a class="nav {% if active == 'kb' %}on{% endif %}" href="{% url 'kb:ask' nav_c.pk %}">📚 Knowledge base</a>
       <a class="nav {% if active == 'profile' %}on{% endif %}" href="{% url 'candidate_profile' nav_c.pk %}">👤 My profile &amp; CVs</a>
       {% if nav_c.user == user or user.is_superuser %}<a class="nav {% if active == 'settings' %}on{% endif %}" href="{% url 'candidate_settings' nav_c.pk %}">⚙️ Settings</a>{% endif %}
     {% endif %}
@@ -97,5 +98,6 @@ pre{white-space:pre-wrap;font-family:inherit;background:#f8fafc;border:1px solid
   </main>
 </div>
 {% endwith %}
+{% block scripts %}{% endblock %}
 </body>
 </html>

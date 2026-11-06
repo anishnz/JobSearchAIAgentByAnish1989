@@ -9,6 +9,7 @@ services:
     environment:
       - HOST_LAN_IP=${HOST_LAN_IP:-}
       - APP_PORT=${APP_PORT:-8010}
+      - RAG_BASE_URL=http://rag:9000
     ports:
       - "${APP_PORT:-8010}:8000"
     volumes:
@@ -20,8 +21,24 @@ services:
     container_name: JobSearchAIAgentByAnish1989-scheduler
     command: scheduler
     env_file: .env
+    environment:
+      - RAG_BASE_URL=http://rag:9000
     volumes:
       - ./data:/app/data
     depends_on:
       - web
+    restart: unless-stopped
+
+  # Knowledge base (RAG) service, taken from CyberQuest. Only the website can reach it
+  # (no port is published to the laptop). Documents and AI model settings are kept in data/rag.
+  rag:
+    build: ./knowledgebase-rag
+    container_name: JobSearchAIAgentByAnish1989-rag
+    environment:
+      - RAG_SERVICE_KEY=${RAG_SERVICE_KEY:?RAG_SERVICE_KEY is missing in .env}
+      - RAG_LLM_API_KEY=${RAG_LLM_API_KEY:-}
+      - RAG_LLM_BASE_URL=${RAG_LLM_BASE_URL:-https://api.deepseek.com/v1}
+      - RAG_LLM_MODEL=${RAG_LLM_MODEL:-deepseek-chat}
+    volumes:
+      - ./data/rag:/data
     restart: unless-stopped

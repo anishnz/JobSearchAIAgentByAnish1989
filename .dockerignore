@@ -4,3 +4,6 @@ data/
 __pycache__/
 *.pyc
 staticfiles/
+.venv/
+knowledgebase-rag/.venv/
+backups/
